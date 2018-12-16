@@ -16,6 +16,8 @@ sphinxcontrib-httpexample = "*"
 tox = "*"
 certifi = "*"
 zest-releaser = {extras = ["recommended"],version = "*"}
+fhirclient = "*"
+guillotina-elasticsearch = "*"
 
 [requires]
 python_version = "3.6"
