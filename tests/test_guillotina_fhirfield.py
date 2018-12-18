@@ -7,21 +7,11 @@ import pytest
 
 from click.testing import CliRunner
 
-from guillotina_fhirfield import guillotina_fhirfield
+import guillotina_fhirfield
 from guillotina_fhirfield import cli
 
 
-@pytest.fixture
-def response():
-    """Sample pytest fixture.
-
-    See more at: http://doc.pytest.org/en/latest/fixture.html
-    """
-    # import requests
-    # return requests.get('https://github.com/audreyr/cookiecutter-pypackage')
-
-
-def test_content(response):
+async def test_content(dummy_request, dummy_guillotina):
     """Sample pytest test function with the pytest fixture as an argument."""
     # from bs4 import BeautifulSoup
     # assert 'GitHub' in BeautifulSoup(response.content).title.string

@@ -1,6 +1,4 @@
-
-__docformat__ = 'restructuredtext'
-# _*_ coding:utf-8 _*_
+# -*- coding: utf-8 -*-
 from fhirclient.models.fhirabstractbase import FHIRValidationError
 from .helpers import import_string
 from .helpers import parse_json_str
@@ -16,6 +14,7 @@ from zope.interface.exceptions import BrokenMethodImplementation
 from zope.interface.exceptions import DoesNotImplement
 from zope.interface.interfaces import IInterface
 from zope.interface.verify import verifyObject
+from guillotina import configure
 from guillotina.schema import get_fields
 from guillotina.schema import Object
 from guillotina.schema.exceptions import ConstraintNotSatisfied
@@ -23,11 +22,14 @@ from guillotina.schema.interfaces import IFromUnicode
 from guillotina.schema.exceptions import WrongContainedType
 from guillotina.schema.exceptions import WrongType
 from collections import OrderedDict
+from guillotina.configure.config import reraise
 
 import jsonpatch
 import six
 import sys
 import json
+
+__docformat__ = "restructuredtext"
 
 
 @implementer(IFhirFieldValue)
@@ -35,42 +37,55 @@ class FhirFieldValue(object):
     """FhirResourceValue is a proxy class for holding any object derrived from
     fhirclient.models.resource.Resource"""
 
-    __slot__ = ('_resource_obj', )
+    __slot__ = ("_resource_obj",)
 
     def foreground_origin(self):
         """Return the original object of FHIR model that is proxied!"""
-        if bool(self._storage):
-            return self._storage.raw
+        if bool(self._resource_obj):
+            return self._resource_obj
         else:
             return None
 
     def patch(self, patch_data):
 
         if not isinstance(patch_data, (list, tuple)):
-            raise WrongType('patch value must be list or tuple type! but got `{0}` type.'.format(type(patch_data)))
+            raise WrongType(
+                "patch value must be list or tuple type! but got `{0}` type.".format(
+                    type(patch_data)
+                )
+            )
 
-        if not bool(self._storage):
-            raise Invalid('None object cannot be patched! Make sure fhir resource value is not empty!')
+        if not bool(self):
+            raise Invalid(
+                "None object cannot be patched! Make sure fhir resource value is not empty!"
+            )
         try:
             patcher = jsonpatch.JsonPatch(patch_data)
             value = patcher.apply(self._resource_obj.as_json())
 
             new_value = self._resource_obj.__class__(value)
-            self._resource_obj = new_value
 
-        except jsonpatch.JsonPatchException as e:
-            six.reraise(Invalid, Invalid(str(e)), sys.exc_info()[2])
+            object.__setattr__(self, "_resource_obj", new_value)
+
+        except jsonpatch.JsonPatchException:
+            t, v, tb = sys.exc_info()
+            try:
+                reraise(Invalid(str(v)), None, tb)
+            finally:
+                del t, v, tb
 
     def stringify(self, prettify=False):
         """ """
         params = {}
         if prettify:
             # will make little bit slow, so apply only if needed
-            params['indent'] = 2
+            params["indent"] = 2
 
-        return self._resource_obj is not None and \
-            json.dumps(self._resource_obj.as_json(), **params) or \
-            ''
+        return (
+            self._resource_obj is not None
+            and json.dumps(self._resource_obj.as_json(), **params)
+            or ""
+        )
 
     def _validate_object(self, obj):
         """ """
@@ -81,22 +96,34 @@ class FhirFieldValue(object):
             verifyObject(IFhirResource, obj, False)
 
         except (BrokenImplementation, BrokenMethodImplementation) as exc:
-            six.reraise(Invalid, Invalid(str(exc)), sys.exc_info()[2])
 
-        except DoesNotImplement as exc:
-            msg = 'Object must be derived from valid FHIR resource model class!'
-            msg += 'But it is found that object is derived from `{0}`'.\
-                    format(obj.__class__.__module__ + '.' + obj.__class__.__name__)
-            msg += '\nOriginal Exception: {0!s}'.format(exc)
+            t, v, tb = sys.exc_info()
+            try:
+                reraise(Invalid(str(v)), None, tb)
+            finally:
+                del t, v, tb
 
-            six.reraise(WrongType, WrongType(msg), sys.exc_info()[2])
+        except DoesNotImplement:
+            msg = "Object must be derived from valid FHIR resource model class!"
+            msg += "But it is found that object is derived from `{0}`".format(
+                obj.__class__.__module__ + "." + obj.__class__.__name__
+            )
 
-    def __init__(self, obj=None, encoding='utf-8'):
+            t, v, tb = sys.exc_info()
+
+            msg += "\nOriginal Exception: {0!s}".format(str(v))
+
+            try:
+                reraise(WrongType(msg), None, tb)
+            finally:
+                del t, v, tb
+
+    def __init__(self, obj=None, encoding="utf-8"):
         """ """
         # Let's validate before value assignment!
         self._validate_object(obj)
 
-        object.__setattr__(self, '_resource_obj', obj)
+        object.__setattr__(self, "_resource_obj", obj)
 
     def __getattr__(self, name):
         """Any attribute from FHIR Resource Object is accessible via this class"""
@@ -107,7 +134,7 @@ class FhirFieldValue(object):
 
     def __getstate__(self):
         """ """
-        odict = OrderedDict([('_resource_obj', self._resource_obj)])
+        odict = OrderedDict([("_resource_obj", self._resource_obj)])
         return odict
 
     def __setattr__(self, name, val):
@@ -126,19 +153,19 @@ class FhirFieldValue(object):
     def __repr__(self):
         """ """
         if self.__bool__():
-            return '<{0} object represents object of {1} at {2}>'.\
-                format(
-                    self.__class__.__module__ + '.' + self.__class__.__name__,
-                    self._resource_obj.__class__.__module__ + '.' + self._resource_obj.__class__.__name__,
-                    hex(id(self)),
-                )
+            return "<{0} object represents object of {1} at {2}>".format(
+                self.__class__.__module__ + "." + self.__class__.__name__,
+                self._resource_obj.__class__.__module__
+                + "."
+                + self._resource_obj.__class__.__name__,
+                hex(id(self)),
+            )
         else:
-            return '<{0} object represents object of {1} at {2}>'.\
-                format(
-                    self.__class__.__module__ + '.' + self.__class__.__name__,
-                    None.__class__.__name__,
-                    hex(id(self)),
-                )
+            return "<{0} object represents object of {1} at {2}>".format(
+                self.__class__.__module__ + "." + self.__class__.__name__,
+                None.__class__.__name__,
+                hex(id(self)),
+            )
 
     def __eq__(self, other):
         if not isinstance(other, FhirFieldValue):
@@ -154,6 +181,7 @@ class FhirFieldValue(object):
     def __bool__(self):
         """ """
         return bool(self._resource_obj is not None)
+
     __nonzero__ = __bool__
 
 
@@ -167,13 +195,10 @@ class FhirField(Object):
     .. note::
         field name must be start with lowercase name of FHIR Resource.
     """
+
     _type = FhirFieldValue
 
-    def __init__(self,
-                 model=None,
-                 resource_type=None,
-                 model_interface=None,
-                 **kw):
+    def __init__(self, model=None, resource_type=None, model_interface=None, **kw):
         """
         :arg model: dotted path of FHIR Model class
 
@@ -189,14 +214,14 @@ class FhirField(Object):
 
         self._init_validate()
 
-        if 'default' in kw:
-            default = kw['default']
+        if "default" in kw:
+            default = kw["default"]
             if isinstance(default, six.string_types):
-                kw['default'] = self.fromUnicode(default)
+                kw["default"] = self.from_unicode(default)
             elif isinstance(default, dict):
-                kw['default'] = self.from_dict(default)
+                kw["default"] = self.from_dict(default)
             elif default is None:
-                kw['default'] = self.from_none()
+                kw["default"] = self.from_none()
 
         super(FhirField, self).__init__(schema=self.schema, **kw)
 
@@ -223,46 +248,61 @@ class FhirField(Object):
     def _init_validate(self):
         """ """
         if self.resource_type and self.model is not None:
-            raise Invalid('Either `model` or `resource_type` value is acceptable! you cannot provide both!')
+            raise Invalid(
+                "Either `model` or `resource_type` value is acceptable! you cannot provide both!"
+            )
 
-        ifields = get_fields(IFhirResource)
-        ifields['model'].validate(self.model)
-        ifields['model_interface'].validate(self.model_interface)
+        ifields = get_fields(IFhirField)
+        ifields["model"].validate(self.model)
+        ifields["model_interface"].validate(self.model_interface)
 
         if self.model:
             try:
                 klass = import_string(self.model)
-            except ImportError as exc:
-                msg = 'Invalid FHIR Resource Model `{0}`! Please check the module or class name.'.format(self.model)
+            except ImportError:
+                msg = "Invalid FHIR Resource Model `{0}`! Please check the module or class name.".format(
+                    self.model
+                )
 
-                raise six.reraise(Invalid, Invalid(msg), sys.exc_info()[2])
+                t, v, tb = sys.exc_info()
+                try:
+                    reraise(Invalid(msg), None, tb)
+                finally:
+                    del t, v, tb
 
             if not IFhirResource.implementedBy(klass):
-                    raise Invalid('{0!r} must be valid model class from fhirclient.model'.format(klass))
 
-        if self.resource_type and\
-                search_fhir_model(self.resource_type) is None:
-            msg = '{0} is not valid fhir resource type!'.format(self.resource_type)
+                raise Invalid(
+                    "{0!r} must be valid model class from fhirclient.model".format(
+                        klass
+                    )
+                )
+
+        if self.resource_type and search_fhir_model(self.resource_type) is None:
+            msg = "{0} is not valid fhir resource type!".format(self.resource_type)
             raise Invalid(msg)
 
         if self.model_interface:
             try:
                 klass = import_string(self.model_interface)
-            except ImportError as exc:
-                msg = 'Invalid FHIR Model Interface`{0}`! Please check the module or class name.'.\
-                    format(self.model_interface)
-
-                raise six.reraise(Invalid, Invalid(msg), sys.exc_info()[2])
+            except ImportError:
+                msg = "Invalid FHIR Model Interface`{0}`! Please check the module or class name.".format(
+                    self.model_interface
+                )
+                t, v, tb = sys.exc_info()
+                try:
+                    reraise(Invalid(msg), None, tb)
+                finally:
+                    del t, v, tb
 
             if not IInterface.providedBy(klass):
-                raise WrongType('An interface is required', klass, self.__name__)
+                raise WrongType("An interface is required", klass, self.__name__)
 
-            if klass is not IFhirResource and\
-                    not issubclass(klass, IFhirResource):
-                msg = '`{0!r}` must be derived from {1}'.format(
+            if klass is not IFhirResource and not issubclass(klass, IFhirResource):
+                msg = "`{0!r}` must be derived from {1}".format(
                     klass,
-                    IFhirResource.__module__ + '.' + IFhirResource.__class__.__name__,
-                    )
+                    IFhirResource.__module__ + "." + IFhirResource.__class__.__name__,
+                )
 
                 raise Invalid(msg)
 
@@ -277,11 +317,15 @@ class FhirField(Object):
             fhir_dict = fhir_json.copy()
         else:
             raise WrongType(
-                'Only dict type data is allowed but got `{0}` type data!'.format(type(fhir_json)),
+                "Only dict type data is allowed but got `{0}` type data!".format(
+                    type(fhir_json)
+                )
             )
 
-        if 'resourceType' not in fhir_dict.keys() or 'id' not in fhir_dict.keys():
-            raise Invalid('Invalid FHIR resource json is provided!\n{0}'.format(fhir_json))
+        if "resourceType" not in fhir_dict.keys() or "id" not in fhir_dict.keys():
+            raise Invalid(
+                "Invalid FHIR resource json is provided!\n{0}".format(fhir_json)
+            )
 
     def _from_dict(self, dict_value):
         """ """
@@ -297,15 +341,16 @@ class FhirField(Object):
 
         else:
             # relay on json value for resource type
-            klass = resource_type_str_to_fhir_model(dict_value['resourceType'])
+            klass = resource_type_str_to_fhir_model(dict_value["resourceType"])
 
         # check constraint
-        if klass.resource_type != dict_value.get('resourceType'):
-                raise ConstraintNotSatisfied(
-                    'Fhir Model mismatched with provided resource type!\n'
-                    '`{0}` resource type is permitted but got `{1}`'.
-                    format(klass.resource_type, dict_value.get('resourceType')),
+        if klass.resource_type != dict_value.get("resourceType"):
+            raise ConstraintNotSatisfied(
+                "Fhir Model mismatched with provided resource type!\n"
+                "`{0}` resource type is permitted but got `{1}`".format(
+                    klass.resource_type, dict_value.get("resourceType")
                 )
+            )
 
         value = FhirFieldValue(obj=klass(dict_value))
 
@@ -319,28 +364,70 @@ class FhirField(Object):
             try:
                 verifyObject(self.model_interface, value.foreground_origin(), False)
 
-            except (BrokenImplementation, BrokenMethodImplementation, DoesNotImplement) as exc:
-                six.reraise(Invalid, Invalid(str(exc)), sys.exc_info()[2])
+            except (
+                BrokenImplementation,
+                BrokenMethodImplementation,
+                DoesNotImplement,
+            ):
+
+                t, v, tb = sys.exc_info()
+                try:
+                    reraise(Invalid(str(v)), None, tb)
+                finally:
+                    del t, v, tb
 
         if self.resource_type and value.resource_type != self.resource_type:
-            msg = 'Resource type must be `{0}` but we got {1} which is not allowed!'.\
-                format(self.resource_type, value.resource_type)
+            msg = "Resource type must be `{0}` but we got {1} which is not allowed!".format(
+                self.resource_type, value.resource_type
+            )
             raise ConstraintNotSatisfied(msg)
 
         if self.model:
             klass = import_string(self.model)
 
-            if value.foreground_origin() is not None and\
-                    not isinstance(value.foreground_origin(), klass):
-                msg = 'Wrong fhir resource value is provided! Value should be object of {0!r} but got {1!r}'.\
-                    format(klass, value.foreground_origin().__class__)
+            if value.foreground_origin() is not None and not isinstance(
+                value.foreground_origin(), klass
+            ):
+                msg = "Wrong fhir resource value is provided! Value should be object of {0!r} but got {1!r}".format(
+                    klass, value.foreground_origin().__class__
+                )
                 raise WrongContainedType(msg)
 
         if value.foreground_origin() is not None:
             try:
                 value.foreground_origin().as_json()
             except (FHIRValidationError, TypeError) as exc:
-                msg = 'There is invalid element inside fhir model object.\n{0!s}'.format(exc)
-                six.reraise(Invalid, Invalid(msg), sys.exc_info()[2])
+                msg = "There is invalid element inside fhir model object.\n{0!s}".format(
+                    exc
+                )
+                t, v, tb = sys.exc_info()
+                try:
+                    reraise(Invalid(msg), None, tb)
+                finally:
+                    del t, v, tb
 
 
+@configure.value_deserializer(IFhirFieldValue)
+def fhir_field_value_deserializer(field, value, context=None):
+    """ """
+    if isinstance(value, str):
+        return IFhirField(field).from_unicode(value)
+    elif isinstance(value, dict):
+        return IFhirField(field).from_dict(value)
+    else:
+        raise ValueError(
+            "Invalid data type({0}) provided! only dict or string data type is accepted.".format(
+                type(value)
+            )
+        )
+
+
+@configure.value_serializer(IFhirFieldValue)
+def fhir_field_value_serializer(value):
+    """ """
+    if value:
+        value = value.as_json()
+    else:
+        value = None
+
+    return value

@@ -6,14 +6,24 @@
 # All imports here
 from collections import defaultdict
 
-import json
+import pathlib
+import ujson as json
 import logging
 import os
+import io
 
 
 __author__ = 'Md Nazrul Islam <email2nazrul@gmail.com>'
 
-LOGGER = logging.getLogger('plone.app.fhirfield')
+
+class NO_VALUE(object):
+    def __repr__(self):
+        return '<NO_VALUE>'
+
+
+NO_VALUE = NO_VALUE()
+EMPTY_STRING = ''
+LOGGER = logging.getLogger('guillotina-fhirfield')
 FHIR_VERSION = 'STU3'
 FHIR_FIELD_DEBUG = os.environ.get('FHIR_FIELD_DEBUG', '').lower() in \
     ('y', 'yes', 't', 'true', '1')
@@ -29,23 +39,21 @@ ERROR_MESSAGES = {
 
 FHIR_RESOURCE_MODEL_CACHE = defaultdict()
 
-FHIR_STATIC_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    'browser',
-    'static',
-    'FHIR')
+FHIR_STATIC_DIR = pathlib.Path(os.path.abspath(__file__)).parent / 'static' / 'HL7'/ 'FHIR'
 
-FHIR_RESOURCE_LIST_DIR = os.path.join(FHIR_STATIC_DIR, 'HL7', 'ResourceList')
+FHIR_RESOURCE_LIST_DIR = FHIR_STATIC_DIR / 'ResourceList'
 
-with open(os.path.join(FHIR_STATIC_DIR, 'HL7',
-                       'search',
-                       'FHIR-Search-Parameter-Registry.json')) as f:
+with io.open(
+        str(FHIR_STATIC_DIR / 'search' / 'FHIR-Search-Parameter-Registry.json'),
+        'r',
+        encoding='utf8') as f:
 
     FHIR_SEARCH_PARAMETER_REGISTRY = json.load(f)['object']
 
-with open(os.path.join(FHIR_STATIC_DIR, 'HL7',
-                       'search',
-                       'FHIR-Search-Parameter-Registry-searchable.json')) as f:
+with io.open(
+        str(FHIR_STATIC_DIR / 'search' / 'FHIR-Search-Parameter-Registry-searchable.json'),
+        'r',
+        encoding='utf8') as f:
 
     FHIR_SEARCH_PARAMETER_SEARCHABLE = json.load(f)['searchable']
     FHIR_SEARCH_PARAMETER_SEARCHABLE_KEYS = \
@@ -80,9 +88,7 @@ SEARCH_PARAM_MODIFIERS = (
     'above',
     'not-in')
 
-with open(
-    os.path.join(FHIR_RESOURCE_LIST_DIR, FHIR_VERSION + '.json'),
-        'r') as f:
+with open(str(FHIR_RESOURCE_LIST_DIR / '{0}.json'.format(FHIR_VERSION)), 'r', encoding='utf8') as f:
     """ """
     FHIR_RESOURCE_LIST = json.load(f)['resources']
 

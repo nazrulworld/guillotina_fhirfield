@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+# @todo: https://github.com/stefankoegl/python-json-patch/blob/master/setup.py
 """The setup script."""
 
 from setuptools import setup, find_packages

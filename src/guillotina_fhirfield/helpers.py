@@ -1,37 +1,30 @@
 # _*_ coding: utf-8 _*_
-from .compat import EMPTY_STRING
-from .compat import NO_VALUE
 from .exc import SearchQueryError
 from .exc import SearchQueryValidationError
+from .variables import EMPTY_STRING
+from .variables import NO_VALUE
 from .variables import FHIR_RESOURCE_LIST  # noqa: F401
 from .variables import FHIR_RESOURCE_MODEL_CACHE  # noqa: F401
 from .variables import FHIR_SEARCH_PARAMETER_SEARCHABLE
 from importlib import import_module
-from plone.api.validation import required_parameters
-from plone.app.fhirfield.compat import _
-from plone.app.fhirfield.compat import json
-from plone.memoize import ram
-from six.moves.urllib.parse import unquote_plus
+from guillotina.configure.config import reraise
 from zope.interface import Invalid
+from urllib.parse import unquote_plus
 
 import pkgutil
 import re
-import six
+import json
 import sys
 import time
 
-
-__author__ = 'Md Nazrul Islam<email2nazrul@gmail.com>'
 
 PATH_WITH_DOT_AS = re.compile(r'\.as\([a-z]+\)$', re.I)
 PATH_WITH_DOT_IS = re.compile(r'\.is\([a-z]+\)$', re.I)
 PATH_WITH_DOT_WHERE = re.compile(r'\.where\([a-z]+\=\'[a-z]+\'\)$', re.I)
 
 
-@required_parameters('model_name')
 def search_fhir_model(model_name, cache=True):
     """ """
-    global FHIR_RESOURCE_MODEL_CACHE
     if model_name in FHIR_RESOURCE_MODEL_CACHE.keys() and cache:
         return '{0}.{1}'.format(
             FHIR_RESOURCE_MODEL_CACHE[model_name],
@@ -53,26 +46,29 @@ def search_fhir_model(model_name, cache=True):
     return None
 
 
-@required_parameters('resource_type')
 def resource_type_str_to_fhir_model(resource_type):
     """ """
     dotted_path = search_fhir_model(resource_type)
     if dotted_path is None:
         raise SearchQueryValidationError(
-            _('Invalid: `{0}` is not valid resource type!'.
-              format(resource_type)))
+            'Invalid: `{0}` is not valid resource type!'.
+              format(resource_type))
 
     return import_string(dotted_path)
 
 
-@required_parameters('dotted_path')
 def import_string(dotted_path):
     """Shameless hack from django utils, please don't mind!"""
     try:
         module_path, class_name = dotted_path.rsplit('.', 1)
     except (ValueError, AttributeError):
+
+        t, v, tb = sys.exc_info()
         msg = "{0} doesn't look like a module path".format(dotted_path)
-        six.reraise(ImportError, ImportError(msg), sys.exc_info()[2])
+        try:
+            reraise(ImportError(msg), None, tb)
+        finally:
+            del t, v, tb
 
     module = import_module(module_path)
 
@@ -81,10 +77,13 @@ def import_string(dotted_path):
     except AttributeError:
         msg = 'Module "{0}" does not define a "{1}" attribute/class'.format(
             module_path, class_name)
-        six.reraise(ImportError, ImportError(msg), sys.exc_info()[2])
+        t, v, tb = sys.exc_info()
+        try:
+            reraise(ImportError(msg), None, tb)
+        finally:
+            del t, v, tb
 
 
-@required_parameters('str_val')
 def parse_json_str(str_val, encoding='utf-8'):
     """ """
     if str_val in (NO_VALUE, EMPTY_STRING, None):
@@ -94,23 +93,25 @@ def parse_json_str(str_val, encoding='utf-8'):
     try:
         json_dict = json.loads(str_val, encoding=encoding)
     except ValueError as exc:
-        six.reraise(Invalid,
-                    Invalid('Invalid JSON String is provided!\n{0!s}'.
-                            format(exc)), sys.exc_info()[2])
+        msg = 'Invalid JSON String is provided!\n{0!s}'.format(exc)
+        t, v, tb = sys.exc_info()
+        try:
+            reraise(Invalid(msg), None, tb)
+        finally:
+            del t, v, tb
 
     return json_dict
 
 
 def validate_index_name(name):
     """ZCatalog index name validation"""
-    global FHIR_RESOURCE_LIST
 
     parts = name.split('_')
 
     try:
         FHIR_RESOURCE_LIST[parts[0].lower()]
     except KeyError:
-        msg = _(
+        msg = (
             'Invalid index name for FhirFieldIndex. Index name must start with '
             'any valid fhir resource type name as prefix or just use '
             'resource type name as index name.\n'
@@ -118,10 +119,13 @@ def validate_index_name(name):
             '(resource_type as index name)\n'
             'example: hospital_resource, patient')
 
-        six.reraise(SearchQueryError, SearchQueryError(msg), sys.exc_info()[2])
+        t, v, tb = sys.exc_info()
+        try:
+            reraise(SearchQueryError(msg), None, tb)
+        finally:
+            del t, v, tb
 
 
-@ram.cache(lambda *args: (args[0].__name__, args[1], time.time() // (60 * 60 * 24)))  # cache for 24 hours
 def fhir_search_path_meta_info(path):
     """ """
     resource_type = path.split('.')[0]
@@ -191,7 +195,6 @@ def _translate_param_name_to_real_path_key(*args):
     return keys
 
 
-@ram.cache(_translate_param_name_to_real_path_key)  # cache for 24 hours
 def translate_param_name_to_real_path(
         param_name,
         resource_type=None):
