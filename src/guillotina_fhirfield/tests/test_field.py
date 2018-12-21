@@ -4,11 +4,14 @@
 """Tests for `guillotina_fhirfield` package."""
 
 from .helpers import FHIR_FIXTURE_PATH
+from .fhir_contents import IOrganization
 from zope.interface import Invalid
 import pytest
+from guillotina.component import get_utility
 from guillotina.schema.exceptions import ConstraintNotSatisfied
 from guillotina.schema.interfaces import IFromUnicode
 from guillotina.schema.exceptions import WrongContainedType
+from guillotina.interfaces import IResourceFactory
 from guillotina.schema.exceptions import WrongType
 from guillotina_fhirfield.field import FhirField
 from guillotina_fhirfield.field import FhirFieldValue
@@ -19,7 +22,9 @@ from guillotina_fhirfield.helpers import parse_json_str
 from zope.interface import implementer
 from guillotina.component import get_multi_adapter
 from guillotina.component import query_adapter
-from guillotina.i18n import Message
+from guillotina.interfaces import ISchemaSerializeToJson
+from guillotina.interfaces import IFactorySerializeToJson
+from guillotina.interfaces import ISchemaFieldSerializeToJson
 from guillotina.interfaces import IJSONToValue
 from guillotina.interfaces import IValueToJson
 import ujson as json
@@ -585,3 +590,44 @@ async def test_fhir_field_deserializer(dummy_request):
 
     deserialized = query_adapter(fhir_field, IJSONToValue, args=[None, None])
     assert deserialized is None
+
+
+async def test_fhir_field_schema_serializer(dummy_request):
+    """ """
+    fhir_field = FhirField(
+        title="Organization resource",
+        model="fhirclient.models.organization.Organization",
+    )
+
+    serializer = get_multi_adapter(
+        (fhir_field, IOrganization, dummy_request),
+        ISchemaFieldSerializeToJson)
+
+    schema_json = await serializer()
+    assert schema_json['type'] == 'FhirField'
+    assert schema_json['model'] == 'fhirclient.models.organization.Organization'
+
+
+async def test_schema_serializer_with_fhir_field(dummy_request):
+    """ """
+    serializer = get_multi_adapter(
+        (IOrganization, dummy_request),
+        ISchemaSerializeToJson)
+
+    serialized_schema = await serializer()
+    assert 'organization_resource' in serialized_schema['properties']
+    assert 'organization_resource' in serialized_schema['required']
+
+
+async def test_factory_serializer_with_fhir_field(dummy_request):
+    """ """
+    factory = get_utility(IResourceFactory, name='Organization')
+
+    serializer = get_multi_adapter(
+        (factory, dummy_request),
+        IFactorySerializeToJson)
+
+    serialized_factory = await serializer()
+    assert 'organization_resource' in serialized_factory['properties']
+    assert 'organization_resource' in serialized_factory['required']
+

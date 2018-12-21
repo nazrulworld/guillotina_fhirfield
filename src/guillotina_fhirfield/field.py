@@ -22,7 +22,10 @@ from guillotina.schema.interfaces import IFromUnicode
 from guillotina.schema.exceptions import WrongContainedType
 from guillotina.schema.exceptions import WrongType
 from collections import OrderedDict
+from guillotina.json.serialize_schema_field import DefaultSchemaFieldSerializer
+from guillotina.interfaces import ISchemaFieldSerializeToJson
 from guillotina.configure.config import reraise
+from zope.interface import Interface
 
 import jsonpatch
 import six
@@ -197,8 +200,10 @@ class FhirField(Object):
     """
 
     _type = FhirFieldValue
+    _model_class = None
+    _model_interface_class = None
 
-    def __init__(self, model=None, resource_type=None, model_interface=None, **kw):
+    def __init__(self, model=None, model_interface=None, resource_type=None, **kw):
         """
         :arg model: dotted path of FHIR Model class
 
@@ -208,11 +213,11 @@ class FhirField(Object):
         """
 
         self.schema = IFhirFieldValue
-        self.model = model
-        self.resource_type = resource_type
-        self.model_interface = model_interface
+        # self.model = model
+        # self.resource_type = resource_type
+        # self.model_interface = model_interface
 
-        self._init_validate(**kw)
+        self._init(model, model_interface, resource_type, **kw)
 
         if "default" in kw:
             default = kw["default"]
@@ -241,7 +246,7 @@ class FhirField(Object):
         self.validate(value)
         return value
 
-    def _init_validate(self, **kw):
+    def _init(self, model, model_interface, resource_type, **kw):
         """ """
 
         if "default" in kw:
@@ -256,14 +261,36 @@ class FhirField(Object):
 
                 raise Invalid(msg)
 
+        field_attributes = get_fields(IFhirField)
+
+        attribute = field_attributes['model'].bind(self)
+        if model is None:
+            attribute.validate(model)
+            attribute_val = None
+        else:
+            attribute_val = attribute.from_unicode(model)
+        attribute.set(self, attribute_val)
+
+        attribute = field_attributes['model_interface'].bind(self)
+        if model_interface is None:
+            attribute.validate(model_interface)
+            attribute_val = None
+        else:
+            attribute_val = attribute.from_unicode(model_interface)
+        attribute.set(self, attribute_val)
+
+        attribute = field_attributes['resource_type'].bind(self)
+        if resource_type is None:
+            attribute.validate(resource_type)
+            attribute_val = None
+        else:
+            attribute_val = attribute.from_unicode(resource_type)
+        attribute.set(self, attribute_val)
+
         if self.resource_type and self.model is not None:
             raise Invalid(
                 "Either `model` or `resource_type` value is acceptable! you cannot provide both!"
             )
-
-        ifields = get_fields(IFhirField)
-        ifields["model"].validate(self.model)
-        ifields["model_interface"].validate(self.model_interface)
 
         if self.model:
             try:
@@ -286,6 +313,7 @@ class FhirField(Object):
                         klass
                     )
                 )
+            self._model_class = klass
 
         if self.resource_type and search_fhir_model(self.resource_type) is None:
             msg = "{0} is not valid fhir resource type!".format(self.resource_type)
@@ -315,15 +343,16 @@ class FhirField(Object):
 
                 raise Invalid(msg)
 
-            self.model_interface = klass
+            self._model_interface_class = klass
 
     def _pre_value_validate(self, fhir_json):
         """ """
-        fhir_dict = None
-        if isinstance(fhir_json, six.string_types):
+        if isinstance(fhir_json, str):
             fhir_dict = parse_json_str(fhir_json).copy()
+
         elif isinstance(fhir_json, dict):
             fhir_dict = fhir_json.copy()
+
         else:
             raise WrongType(
                 "Only dict type data is allowed but got `{0}` type data!".format(
@@ -343,7 +372,7 @@ class FhirField(Object):
 
         if self.model:
             # enforce use class from defined! this is kind of validation
-            klass = import_string(self.model)
+            klass = self._model_class
 
         elif self.resource_type:
             klass = resource_type_str_to_fhir_model(self.resource_type)
@@ -371,7 +400,10 @@ class FhirField(Object):
 
         if self.model_interface:
             try:
-                verifyObject(self.model_interface, value.foreground_origin(), False)
+                verifyObject(
+                    self._model_interface_class,
+                    value.foreground_origin(),
+                    False)
 
             except (BrokenImplementation, BrokenMethodImplementation, DoesNotImplement):
 
@@ -388,7 +420,7 @@ class FhirField(Object):
             raise ConstraintNotSatisfied(msg)
 
         if self.model:
-            klass = import_string(self.model)
+            klass = self._model_class
 
             if value.foreground_origin() is not None and not isinstance(
                 value.foreground_origin(), klass
@@ -439,3 +471,13 @@ def fhir_field_value_serializer(value):
         value = None
 
     return value
+
+
+@configure.adapter(
+    for_=(IFhirField, Interface, Interface),
+    provides=ISchemaFieldSerializeToJson)
+class DefaultFhirFieldSchemaSerializer(DefaultSchemaFieldSerializer):
+
+    @property
+    def field_type(self):
+        return 'FhirField'

@@ -14,5 +14,5 @@ class IOrganization(IResource):
 @configure.contenttype(
     type_name="Organization",
     schema=IOrganization)
-class IOrganization(Folder):
+class Organization(Folder):
     pass
