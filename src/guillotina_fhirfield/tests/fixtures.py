@@ -10,6 +10,7 @@ def base_settings_configurator(settings):
         settings['applications'].append('guillotina_elasticsearch')
 
     settings['applications'].append('guillotina_fhirfield')
+    settings['applications'].append('guillotina_fhirfield.tests.fhir_contents')
 
 
 testing.configure_with(base_settings_configurator)

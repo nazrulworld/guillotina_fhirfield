@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import guillotina_fhirfield.patch
 from guillotina import configure
 """Top-level package for guillotina_fhirfield."""
 
@@ -12,6 +11,5 @@ app_settings = {
 }
 
 def includeme(root):
-
-    # configure.scan('guillotina_fhirfield.patch')
-    pass
+    configure.scan('guillotina_fhirfield.patch')
+    configure.scan('guillotina_fhirfield.field')

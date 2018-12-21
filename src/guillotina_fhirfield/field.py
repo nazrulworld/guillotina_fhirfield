@@ -27,7 +27,7 @@ from guillotina.configure.config import reraise
 import jsonpatch
 import six
 import sys
-import json
+import ujson
 
 __docformat__ = "restructuredtext"
 
@@ -83,7 +83,7 @@ class FhirFieldValue(object):
 
         return (
             self._resource_obj is not None
-            and json.dumps(self._resource_obj.as_json(), **params)
+            and ujson.dumps(self._resource_obj.as_json(), **params)
             or ""
         )
 
@@ -212,16 +212,16 @@ class FhirField(Object):
         self.resource_type = resource_type
         self.model_interface = model_interface
 
-        self._init_validate()
+        self._init_validate(**kw)
 
         if "default" in kw:
             default = kw["default"]
-            if isinstance(default, six.string_types):
+
+            if isinstance(default, str):
                 kw["default"] = self.from_unicode(default)
+
             elif isinstance(default, dict):
                 kw["default"] = self.from_dict(default)
-            elif default is None:
-                kw["default"] = self.from_none()
 
         super(FhirField, self).__init__(schema=self.schema, **kw)
 
@@ -241,12 +241,21 @@ class FhirField(Object):
         self.validate(value)
         return value
 
-    def from_none(self):
-        """"""
-        return FhirFieldValue()
-
-    def _init_validate(self):
+    def _init_validate(self, **kw):
         """ """
+
+        if "default" in kw:
+
+            if (
+                isinstance(kw["default"], (str, dict)) or kw["default"] is None
+            ) is False:
+                msg = (
+                    "Only dict or string or None is accepted as "
+                    "default value but got {0}".format(type(kw["default"]))
+                )
+
+                raise Invalid(msg)
+
         if self.resource_type and self.model is not None:
             raise Invalid(
                 "Either `model` or `resource_type` value is acceptable! you cannot provide both!"
@@ -364,11 +373,7 @@ class FhirField(Object):
             try:
                 verifyObject(self.model_interface, value.foreground_origin(), False)
 
-            except (
-                BrokenImplementation,
-                BrokenMethodImplementation,
-                DoesNotImplement,
-            ):
+            except (BrokenImplementation, BrokenMethodImplementation, DoesNotImplement):
 
                 t, v, tb = sys.exc_info()
                 try:
@@ -407,13 +412,16 @@ class FhirField(Object):
                     del t, v, tb
 
 
-@configure.value_deserializer(IFhirFieldValue)
-def fhir_field_value_deserializer(field, value, context=None):
+@configure.value_deserializer(IFhirField)
+def fhir_field_deserializer(fhirfield, value, context=None):
     """ """
+    if value in (None, ""):
+        return None
+
     if isinstance(value, str):
-        return IFhirField(field).from_unicode(value)
+        return IFhirField(fhirfield).from_unicode(value)
     elif isinstance(value, dict):
-        return IFhirField(field).from_dict(value)
+        return IFhirField(fhirfield).from_dict(value)
     else:
         raise ValueError(
             "Invalid data type({0}) provided! only dict or string data type is accepted.".format(

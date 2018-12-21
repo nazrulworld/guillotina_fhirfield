@@ -51,8 +51,7 @@ class IFhirField(IObject):
 
     def from_dict(dict_value):
         """ """
-    def from_none():
-        """Make FhirFieldValue instance without FHIR data """
+
 
 
 class IFhirFieldValue(Interface):

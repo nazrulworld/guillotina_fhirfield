@@ -3,7 +3,7 @@
 
 """Tests for `guillotina_fhirfield` package."""
 
-from helpers import FHIR_FIXTURE_PATH
+from .helpers import FHIR_FIXTURE_PATH
 from zope.interface import Invalid
 import pytest
 from guillotina.schema.exceptions import ConstraintNotSatisfied
@@ -13,9 +13,15 @@ from guillotina.schema.exceptions import WrongType
 from guillotina_fhirfield.field import FhirField
 from guillotina_fhirfield.field import FhirFieldValue
 from guillotina_fhirfield.interfaces import IFhirResource
+from guillotina_fhirfield.interfaces import IFhirFieldValue
 from guillotina_fhirfield.helpers import resource_type_str_to_fhir_model
 from guillotina_fhirfield.helpers import parse_json_str
 from zope.interface import implementer
+from guillotina.component import get_multi_adapter
+from guillotina.component import query_adapter
+from guillotina.i18n import Message
+from guillotina.interfaces import IJSONToValue
+from guillotina.interfaces import IValueToJson
 import ujson as json
 import pickle
 
@@ -108,7 +114,8 @@ async def test_field_init_validation_with_noninterface(dummy_guillotina):
     # Wrong interface class
     try:
         FhirField(
-            title="Organization resource", model_interface="helpers.NoneInterfaceClass"
+            title="Organization resource",
+            model_interface="guillotina_fhirfield.tests.helpers.NoneInterfaceClass",
         )
         raise AssertionError(
             "Code should not come here! as wrong interface class is provided"
@@ -232,7 +239,8 @@ async def test_field_validate(dummy_guillotina):
 
     # Wrong interface attributes
     fhir_field = FhirField(
-        title="Organization resource", model_interface="helpers.IWrongInterface"
+        title="Organization resource",
+        model_interface="guillotina_fhirfield.tests.helpers.IWrongInterface",
     )
 
     try:
@@ -352,29 +360,6 @@ async def test_field_from_unicode_with_empty_str(dummy_guillotina):
     assert value is None
 
 
-async def test_field_from_none(dummy_guillotina):
-    """ """
-    fhir_field = FhirField(
-        title="Organization resource",
-        model="fhirclient.models.organization.Organization",
-    )
-
-    empty_value = fhir_field.from_none()
-    assert bool(empty_value) is False
-
-    try:
-        empty_value.resource_type
-        raise AssertionError("Code should not come here! should raise attribute error")
-    except AttributeError:
-        pass
-
-    try:
-        empty_value.resource_type = "set value"
-        raise AssertionError("Code should not come here! should raise attribute error")
-    except AttributeError:
-        pass
-
-
 async def test_field_default_value(dummy_guillotina):
     """ """
     with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
@@ -400,7 +385,27 @@ async def test_field_default_value(dummy_guillotina):
         model="fhirclient.models.organization.Organization",
         default=None,
     )
-    assert str(fhir_field3.default) == ""
+    assert fhir_field3.default is None
+
+
+async def test_field_with_wrong_default_value(dummy_guillotina):
+    """ """
+    try:
+        FhirField(
+            title="Organization resource",
+            model="fhirclient.models.organization.Organization",
+            default=False,
+        )
+    except Invalid as exc:
+        assert "Only dict or string or None is accepted" in str(exc)
+    try:
+        FhirField(
+            title="Organization resource",
+            model="fhirclient.models.organization.Organization",
+            default={"id": "I am wrong FHIR"},
+        )
+    except Invalid as exc:
+        assert "Invalid FHIR resource json is provided!" in str(exc)
 
 
 async def test_field_resource_type_constraint(dummy_guillotina):
@@ -418,10 +423,10 @@ async def test_field_resource_type_constraint(dummy_guillotina):
 
 async def test_fhir_field_value(dummy_guillotina):
     """ """
-    with open(str(FHIR_FIXTURE_PATH / 'Organization.json'), 'r') as f:
+    with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
         fhir_json = json.load(f)
 
-    model = resource_type_str_to_fhir_model(fhir_json['resourceType'])
+    model = resource_type_str_to_fhir_model(fhir_json["resourceType"])
     fhir_resource = model(fhir_json)
     fhir_resource_value = FhirFieldValue(obj=fhir_resource)
 
@@ -431,31 +436,31 @@ async def test_fhir_field_value(dummy_guillotina):
     assert isinstance(fhir_resource_value.stringify(), str) is True
 
     # Test Patch
-    patch_data = {'hello': 123}
+    patch_data = {"hello": 123}
     try:
         fhir_resource_value.patch(patch_data)
-        raise AssertionError('Code should not come here! because wrong type data is provided for patch!')
+        raise AssertionError(
+            "Code should not come here! because wrong type data is provided for patch!"
+        )
     except WrongType:
         pass
     patch_data = [
-        {'path': '/text/fake path', 'value': 'patched!', 'Invalid Option': 'replace'},
+        {"path": "/text/fake path", "value": "patched!", "Invalid Option": "replace"}
     ]
     # Test getting original error from json patcher
     try:
         fhir_resource_value.patch(patch_data)
         raise AssertionError(
-            'Code should not come here! because wrong patch data is'
-            ' provided for patch and invalid format as well!',
+            "Code should not come here! because wrong patch data is"
+            " provided for patch and invalid format as well!"
         )
     except Invalid as exc:
         assert "does not contain 'op' member" in str(exc)
 
-    patch_data = [
-        {'path': '/text/status', 'value': 'patched!', 'op': 'replace'},
-    ]
+    patch_data = [{"path": "/text/status", "value": "patched!", "op": "replace"}]
     fhir_resource_value.patch(patch_data)
 
-    assert 'patched!' == fhir_resource_value.text.status
+    assert "patched!" == fhir_resource_value.text.status
 
     # Make sure string is transformable to fhir resource
     json_str = fhir_resource_value.stringify()
@@ -464,10 +469,10 @@ async def test_fhir_field_value(dummy_guillotina):
     try:
         model(json_dict).as_json()
     except Exception:
-        raise AssertionError('Code should not come here!')
+        raise AssertionError("Code should not come here!")
 
     # Test self representation
-    assert fhir_resource_value.__class__.__module__ in  repr(fhir_resource_value)
+    assert fhir_resource_value.__class__.__module__ in repr(fhir_resource_value)
 
     empty_resource = FhirFieldValue()
     # __bool__ should be False
@@ -482,53 +487,56 @@ async def test_fhir_field_value(dummy_guillotina):
     # Test Patch with empty value
     try:
         empty_resource.patch(patch_data)
-        raise AssertionError('Code should not come here! because empty resource cannot be patched!')
+        raise AssertionError(
+            "Code should not come here! because empty resource cannot be patched!"
+        )
     except Invalid:
         pass
 
     # Let's try to modify
-    fhir_resource_value.identifier[0].use = 'no-official'
+    fhir_resource_value.identifier[0].use = "no-official"
 
     # test if it impact
-    assert fhir_resource_value.as_json()['identifier'][0]['use'] == 'no-official'
+    assert fhir_resource_value.as_json()["identifier"][0]["use"] == "no-official"
 
     # Let's try to set value on empty value
     try:
-        empty_resource.id = 'my value'
-        raise AssertionError('Code should not come here! because no fhir resource!')
+        empty_resource.id = "my value"
+        raise AssertionError("Code should not come here! because no fhir resource!")
     except AttributeError:
         pass
 
-    assert 'NoneType' in repr(empty_resource)
-    assert '' == str(empty_resource)
+    assert "NoneType" in repr(empty_resource)
+    assert "" == str(empty_resource)
 
     # Validation Test:: more explict???
     try:
-        FhirFieldValue(obj=dict(hello='Ketty'))
-        raise AssertionError('Code should not come here, because should raise validation error!')
+        FhirFieldValue(obj=dict(hello="Ketty"))
+        raise AssertionError(
+            "Code should not come here, because should raise validation error!"
+        )
     except WrongType:
         pass
 
     @implementer(IFhirResource)
     class TestBrokenInterfaceObject(object):
-
         def __init__(self):
             pass
 
     broken_obj = TestBrokenInterfaceObject()
     try:
         fhir_resource_value._validate_object(broken_obj)
-        raise AssertionError('Code should not come here! because of validation error')
+        raise AssertionError("Code should not come here! because of validation error")
     except Invalid as exc:
-        assert ' The resource_type attribute was not provided' in str(exc)
+        assert " The resource_type attribute was not provided" in str(exc)
 
 
-async def test_fhir_resource_value_pickling(dummy_guillotina):
+async def test_fhir_field_value_pickling(dummy_guillotina):
     """ """
-    with open(str(FHIR_FIXTURE_PATH / 'Organization.json'), 'r') as f:
+    with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
         fhir_json = json.load(f)
 
-    model = resource_type_str_to_fhir_model(fhir_json['resourceType'])
+    model = resource_type_str_to_fhir_model(fhir_json["resourceType"])
     fhir_resource = model(fhir_json)
     fhir_resource_value = FhirFieldValue(obj=fhir_resource)
 
@@ -537,3 +545,43 @@ async def test_fhir_resource_value_pickling(dummy_guillotina):
 
     assert len(deserialized.stringify()) == len(fhir_resource_value.stringify())
 
+
+async def test_fhir_field_value_serializer(dummy_request):
+    """ """
+    with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
+        fhir_json = json.load(f)
+
+    model = resource_type_str_to_fhir_model(fhir_json["resourceType"])
+    fhir_resource = model(fhir_json)
+    value = FhirFieldValue(obj=fhir_resource)
+
+    serialized = query_adapter(value, IValueToJson)
+    assert serialized == value.as_json()
+
+    serialized = query_adapter(FhirFieldValue(), IValueToJson)
+
+    assert serialized is None
+
+
+async def test_fhir_field_deserializer(dummy_request):
+    """ """
+    with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
+        fhir_json = json.load(f)
+
+    fhir_field = FhirField(
+        title="Organization resource",
+        model="fhirclient.models.organization.Organization",
+        required=False,
+    )
+
+    deserialized = query_adapter(fhir_field, IJSONToValue, args=[fhir_json, None])
+    assert IFhirFieldValue.providedBy(deserialized) is True
+    assert deserialized.as_json() == fhir_json
+
+    deserialized = query_adapter(
+        fhir_field, IJSONToValue, args=[json.dumps(fhir_json), None]
+    )
+    assert IFhirFieldValue.providedBy(deserialized) is True
+
+    deserialized = query_adapter(fhir_field, IJSONToValue, args=[None, None])
+    assert deserialized is None
