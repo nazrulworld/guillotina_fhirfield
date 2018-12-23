@@ -39,7 +39,7 @@ ERROR_MESSAGES = {
 
 FHIR_RESOURCE_MODEL_CACHE = defaultdict()
 
-FHIR_STATIC_DIR = pathlib.Path(os.path.abspath(__file__)).parent / 'static' / 'HL7'/ 'FHIR'
+FHIR_STATIC_DIR = pathlib.Path(os.path.abspath(__file__)).parent / 'static' / 'HL7' / 'FHIR'
 
 FHIR_RESOURCE_LIST_DIR = FHIR_STATIC_DIR / 'ResourceList'
 
@@ -93,4 +93,4 @@ with open(str(FHIR_RESOURCE_LIST_DIR / '{0}.json'.format(FHIR_VERSION)), 'r', en
     FHIR_RESOURCE_LIST = json.load(f)['resources']
 
 
-FHIR_ES_MAPPINGS_CACHE: dict = {}
+FHIR_ES_MAPPINGS_CACHE: dict = {}  # noqa: E999

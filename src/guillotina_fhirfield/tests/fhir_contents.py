@@ -1,7 +1,6 @@
 from guillotina import configure
 from guillotina.content import Folder
 from guillotina.interfaces import IResource
-
 from guillotina_fhirfield.field import FhirField
 
 

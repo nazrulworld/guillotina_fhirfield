@@ -7,7 +7,6 @@ import re
 import sys
 import time
 from importlib import import_module
-from typing import ClassVar
 from typing import Union
 from urllib.parse import unquote_plus
 
@@ -30,7 +29,7 @@ PATH_WITH_DOT_WHERE = re.compile(r"\.where\([a-z]+=\'[a-z]+\'\)$", re.I)
 NoneType = type(None)
 
 
-def search_fhir_model(model_name: str, cache: bool = True) -> Union[str, NoneType]:
+def search_fhir_model(model_name: str, cache: bool = True) -> Union[str, NoneType]:  # noqa: E999
     """This function finds FHIR resource model class (from fhirclient.models) and return dotted path string.
 
     :arg model_name: the resource type name (required). i.e Organization

@@ -9,6 +9,7 @@ guillotina-fhirfield = {path = ".",extras = ["test"],editable = true}
 [packages]
 flake8 = "*"
 flake8-isort = "*"
+flake8-mypy = "*"
 isort = "*"
 sphinx = "*"
 sphinx-rtd-theme = "*"

@@ -34,7 +34,7 @@ from .fhir_contents import IOrganization
 from .helpers import FHIR_FIXTURE_PATH
 
 
-async def test_field_init_validate(dummy_guillotina):  # noqa: C901
+async def test_field_init_validate(dummy_guillotina):  # noqa: C901,E999
     """ """
     # Test with minimal params
     try:

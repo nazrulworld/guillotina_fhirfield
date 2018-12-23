@@ -10,7 +10,7 @@ import guillotina_fhirfield
 from guillotina_fhirfield import cli
 
 
-async def test_content(dummy_request, dummy_guillotina):
+async def test_content(dummy_request, dummy_guillotina):  # noqa: E999
     """Sample pytest test function with the pytest fixture as an argument."""
     # from bs4 import BeautifulSoup
     # assert 'GitHub' in BeautifulSoup(response.content).title.string

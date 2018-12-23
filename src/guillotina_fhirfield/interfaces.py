@@ -53,7 +53,6 @@ class IFhirField(IObject):
         """ """
 
 
-
 class IFhirFieldValue(Interface):
     """ """
     _resource_obj = Attribute(

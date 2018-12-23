@@ -95,7 +95,7 @@ class FhirFieldValue(object):
             or ""
         )
 
-    def _validate_object(self, obj: FhirResourceType):
+    def _validate_object(self, obj: FhirResourceType):  # noqa: E999
         """ """
         if obj is None:
             return
@@ -103,7 +103,7 @@ class FhirFieldValue(object):
         try:
             verifyObject(IFhirResource, obj, False)
 
-        except (BrokenImplementation, BrokenMethodImplementation) as exc:
+        except (BrokenImplementation, BrokenMethodImplementation):
 
             t, v, tb = sys.exc_info()
             try:
@@ -435,9 +435,10 @@ class FhirField(Object):
             if value.foreground_origin() is not None and not isinstance(
                 value.foreground_origin(), klass
             ):
-                msg = "Wrong fhir resource value is provided! Value should be object of {0!r} but got {1!r}".format(
-                    klass, value.foreground_origin().__class__
-                )
+                msg = "Wrong fhir resource value is provided! "\
+                      "Value should be object of {0!r} but got {1!r}".\
+                    format(klass, value.foreground_origin().__class__)
+
                 raise WrongContainedType(msg)
 
         if value.foreground_origin() is not None:
