@@ -11,4 +11,3 @@ def patch_fhir_base_model():
         implementer(IFhirResource)(fmr.Resource)
 
 patch_fhir_base_model()
-

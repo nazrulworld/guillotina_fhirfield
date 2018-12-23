@@ -21,7 +21,9 @@ test_requirements = [
     'pytest',
     'pytest-asyncio',
     'pytest-cov',
+    'pytest-isort',
     'pytest-docker-fixtures',
+    'tox-pipenv'
 ]
 
 setup(

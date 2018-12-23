@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Module where all interfaces, events and exceptions live."""
-from guillotina.schema import TextLine
 from guillotina.schema import DottedName
+from guillotina.schema import TextLine
 from guillotina.schema.interfaces import IObject
 from zope.interface import Attribute
 from zope.interface import Interface

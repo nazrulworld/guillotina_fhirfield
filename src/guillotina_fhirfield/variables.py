@@ -4,13 +4,13 @@
 # @Link    : http://nazrul.me/
 # @Version : $Id$
 # All imports here
-from collections import defaultdict
-
-import pathlib
-import ujson as json
+import io
 import logging
 import os
-import io
+import pathlib
+from collections import defaultdict
+
+import ujson as json
 
 
 __author__ = 'Md Nazrul Islam <email2nazrul@gmail.com>'
@@ -93,4 +93,4 @@ with open(str(FHIR_RESOURCE_LIST_DIR / '{0}.json'.format(FHIR_VERSION)), 'r', en
     FHIR_RESOURCE_LIST = json.load(f)['resources']
 
 
-FHIR_ES_MAPPINGS_CACHE = dict()
+FHIR_ES_MAPPINGS_CACHE: dict = {}

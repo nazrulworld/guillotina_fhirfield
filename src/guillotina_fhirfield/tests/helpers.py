@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from guillotina_fhirfield.interfaces import IFhirResource
-import pathlib
 import os
+import pathlib
+
+from guillotina_fhirfield.interfaces import IFhirResource
 
 
 FHIR_FIXTURE_PATH = pathlib.Path(os.path.abspath(__file__)).parent / 'static' / 'FHIR'

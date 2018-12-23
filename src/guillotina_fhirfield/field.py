@@ -1,38 +1,43 @@
 # -*- coding: utf-8 -*-
+import sys
+from collections import OrderedDict
+from typing import NewType
+
+import jsonpatch
 from fhirclient.models.fhirabstractbase import FHIRValidationError
-from .helpers import import_string
-from .helpers import parse_json_str
-from .helpers import resource_type_str_to_fhir_model
-from .helpers import search_fhir_model
-from .interfaces import IFhirField
-from .interfaces import IFhirResource
-from .interfaces import IFhirFieldValue
-from zope.interface import implementer
+from fhirclient.models.resource import Resource
+from guillotina import configure
+from guillotina.configure.config import reraise
+from guillotina.interfaces import ISchemaFieldSerializeToJson
+from guillotina.json.serialize_schema_field import DefaultSchemaFieldSerializer
+from guillotina.schema import Object
+from guillotina.schema import get_fields
+from guillotina.schema.exceptions import ConstraintNotSatisfied
+from guillotina.schema.exceptions import WrongContainedType
+from guillotina.schema.exceptions import WrongType
+from guillotina.schema.interfaces import IFromUnicode
+from zope.interface import Interface
 from zope.interface import Invalid
+from zope.interface import implementer
 from zope.interface.exceptions import BrokenImplementation
 from zope.interface.exceptions import BrokenMethodImplementation
 from zope.interface.exceptions import DoesNotImplement
 from zope.interface.interfaces import IInterface
 from zope.interface.verify import verifyObject
-from guillotina import configure
-from guillotina.schema import get_fields
-from guillotina.schema import Object
-from guillotina.schema.exceptions import ConstraintNotSatisfied
-from guillotina.schema.interfaces import IFromUnicode
-from guillotina.schema.exceptions import WrongContainedType
-from guillotina.schema.exceptions import WrongType
-from collections import OrderedDict
-from guillotina.json.serialize_schema_field import DefaultSchemaFieldSerializer
-from guillotina.interfaces import ISchemaFieldSerializeToJson
-from guillotina.configure.config import reraise
-from zope.interface import Interface
 
-import jsonpatch
-import six
-import sys
 import ujson
 
+from .helpers import import_string
+from .helpers import parse_json_str
+from .helpers import resource_type_to_model_cls
+from .interfaces import IFhirField
+from .interfaces import IFhirFieldValue
+from .interfaces import IFhirResource
+
+
 __docformat__ = "restructuredtext"
+
+FhirResourceType = NewType('FhirResourceType', Resource)
 
 
 @implementer(IFhirFieldValue)
@@ -90,7 +95,7 @@ class FhirFieldValue(object):
             or ""
         )
 
-    def _validate_object(self, obj):
+    def _validate_object(self, obj: FhirResourceType):
         """ """
         if obj is None:
             return
@@ -121,7 +126,7 @@ class FhirFieldValue(object):
             finally:
                 del t, v, tb
 
-    def __init__(self, obj=None, encoding="utf-8"):
+    def __init__(self, obj: FhirResourceType = None):
         """ """
         # Let's validate before value assignment!
         self._validate_object(obj)
@@ -146,7 +151,7 @@ class FhirFieldValue(object):
 
     def __setstate__(self, odict):
         """ """
-        for attr, value in six.iteritems(odict):
+        for attr, value in odict.items():
             object.__setattr__(self, attr, value)
 
     def __str__(self):
@@ -186,6 +191,9 @@ class FhirFieldValue(object):
         return bool(self._resource_obj is not None)
 
     __nonzero__ = __bool__
+
+
+FhirFieldValueType = NewType('FhirFieldValueType', FhirFieldValue)
 
 
 @implementer(IFhirField, IFromUnicode)
@@ -315,9 +323,18 @@ class FhirField(Object):
                 )
             self._model_class = klass
 
-        if self.resource_type and search_fhir_model(self.resource_type) is None:
-            msg = "{0} is not valid fhir resource type!".format(self.resource_type)
-            raise Invalid(msg)
+        if self.resource_type:
+
+            try:
+                self._model_class = resource_type_to_model_cls(self.resource_type)
+            except ImportError:
+                msg = "{0} is not valid fhir resource type!".format(self.resource_type)
+                t, v, tb = sys.exc_info()
+                try:
+                    reraise(Invalid(msg), None, tb)
+                finally:
+                    del t, v, tb
+                raise Invalid(msg)
 
         if self.model_interface:
             try:
@@ -368,18 +385,11 @@ class FhirField(Object):
     def _from_dict(self, dict_value):
         """ """
         self._pre_value_validate(dict_value)
-        klass = None
+        klass = self._model_class
 
-        if self.model:
-            # enforce use class from defined! this is kind of validation
-            klass = self._model_class
-
-        elif self.resource_type:
-            klass = resource_type_str_to_fhir_model(self.resource_type)
-
-        else:
+        if klass is None:
             # relay on json value for resource type
-            klass = resource_type_str_to_fhir_model(dict_value["resourceType"])
+            klass = resource_type_to_model_cls(dict_value["resourceType"])
 
         # check constraint
         if klass.resource_type != dict_value.get("resourceType"):

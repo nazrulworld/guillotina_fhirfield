@@ -4,7 +4,6 @@
 """Tests for `guillotina_fhirfield` package."""
 
 import pytest
-
 from click.testing import CliRunner
 
 import guillotina_fhirfield

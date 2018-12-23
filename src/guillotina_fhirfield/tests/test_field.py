@@ -3,32 +3,35 @@
 
 """Tests for `guillotina_fhirfield` package."""
 
-from .helpers import FHIR_FIXTURE_PATH
-from .fhir_contents import IOrganization
-from zope.interface import Invalid
+import pickle
+
 import pytest
+from guillotina.component import get_multi_adapter
 from guillotina.component import get_utility
-from guillotina.schema.exceptions import ConstraintNotSatisfied
-from guillotina.schema.interfaces import IFromUnicode
-from guillotina.schema.exceptions import WrongContainedType
+from guillotina.component import query_adapter
+from guillotina.interfaces import IFactorySerializeToJson
+from guillotina.interfaces import IJSONToValue
 from guillotina.interfaces import IResourceFactory
+from guillotina.interfaces import ISchemaFieldSerializeToJson
+from guillotina.interfaces import ISchemaSerializeToJson
+from guillotina.interfaces import IValueToJson
+from guillotina.schema.exceptions import ConstraintNotSatisfied
+from guillotina.schema.exceptions import WrongContainedType
 from guillotina.schema.exceptions import WrongType
+from guillotina.schema.interfaces import IFromUnicode
+from zope.interface import Invalid
+from zope.interface import implementer
+
+import ujson as json
 from guillotina_fhirfield.field import FhirField
 from guillotina_fhirfield.field import FhirFieldValue
-from guillotina_fhirfield.interfaces import IFhirResource
-from guillotina_fhirfield.interfaces import IFhirFieldValue
-from guillotina_fhirfield.helpers import resource_type_str_to_fhir_model
 from guillotina_fhirfield.helpers import parse_json_str
-from zope.interface import implementer
-from guillotina.component import get_multi_adapter
-from guillotina.component import query_adapter
-from guillotina.interfaces import ISchemaSerializeToJson
-from guillotina.interfaces import IFactorySerializeToJson
-from guillotina.interfaces import ISchemaFieldSerializeToJson
-from guillotina.interfaces import IJSONToValue
-from guillotina.interfaces import IValueToJson
-import ujson as json
-import pickle
+from guillotina_fhirfield.helpers import resource_type_to_model_cls
+from guillotina_fhirfield.interfaces import IFhirFieldValue
+from guillotina_fhirfield.interfaces import IFhirResource
+
+from .fhir_contents import IOrganization
+from .helpers import FHIR_FIXTURE_PATH
 
 
 async def test_field_init_validate(dummy_guillotina):  # noqa: C901
@@ -98,7 +101,7 @@ async def test_field_init_validate(dummy_guillotina):  # noqa: C901
         FhirField(title="Organization resource", resource_type="FakeResource")
         raise AssertionError("Code should not come here! as should be invalid error")
     except Invalid as exc:
-        assert "FakeResource is not valid fhir resource type" in str(exc)
+        assert "`FakeResource` is not valid fhir resource type" in str(exc)
 
     # Wrong base interface class
     try:
@@ -190,7 +193,7 @@ async def test_field_validate(dummy_guillotina):
     with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
         json_dict = json.load(f)
 
-    organization = resource_type_str_to_fhir_model("Organization")(json_dict)
+    organization = resource_type_to_model_cls("Organization")(json_dict)
     fhir_resource_value = FhirFieldValue(obj=organization)
 
     fhir_field = FhirField(title="Organization resource")
@@ -431,7 +434,7 @@ async def test_fhir_field_value(dummy_guillotina):
     with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
         fhir_json = json.load(f)
 
-    model = resource_type_str_to_fhir_model(fhir_json["resourceType"])
+    model = resource_type_to_model_cls(fhir_json["resourceType"])
     fhir_resource = model(fhir_json)
     fhir_resource_value = FhirFieldValue(obj=fhir_resource)
 
@@ -541,7 +544,7 @@ async def test_fhir_field_value_pickling(dummy_guillotina):
     with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
         fhir_json = json.load(f)
 
-    model = resource_type_str_to_fhir_model(fhir_json["resourceType"])
+    model = resource_type_to_model_cls(fhir_json["resourceType"])
     fhir_resource = model(fhir_json)
     fhir_resource_value = FhirFieldValue(obj=fhir_resource)
 
@@ -556,7 +559,7 @@ async def test_fhir_field_value_serializer(dummy_request):
     with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
         fhir_json = json.load(f)
 
-    model = resource_type_str_to_fhir_model(fhir_json["resourceType"])
+    model = resource_type_to_model_cls(fhir_json["resourceType"])
     fhir_resource = model(fhir_json)
     value = FhirFieldValue(obj=fhir_resource)
 
@@ -630,4 +633,3 @@ async def test_factory_serializer_with_fhir_field(dummy_request):
     serialized_factory = await serializer()
     assert 'organization_resource' in serialized_factory['properties']
     assert 'organization_resource' in serialized_factory['required']
-
