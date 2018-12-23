@@ -15,6 +15,7 @@ sphinx = "*"
 sphinx-rtd-theme = "*"
 sphinxcontrib-httpdomain = "*"
 sphinxcontrib-httpexample = "*"
+sphinxcontrib-apidoc = "*"
 tox = "*"
 certifi = "*"
 zest-releaser = {extras = ["recommended"],version = "*"}

@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "96d3e122af7b79382c77d38a740a4eee2c8fa9f7fe49102b7b5142d1abc3a6f5"
+            "sha256": "f5e42f59654e91afbef1f5d7f7152582bb91e6e71127dff8d228a15e972a6e99"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -419,6 +419,13 @@
             ],
             "version": "==18.0"
         },
+        "pbr": {
+            "hashes": [
+                "sha256:f59d71442f9ece3dffc17bc36575768e1ee9967756e6b6535f0ee1f0054c3d68",
+                "sha256:f6d5b23f226a2ba58e14e49aa3b1bfaf814d0199144b95d78458212444de1387"
+            ],
+            "version": "==5.1.1"
+        },
         "pkginfo": {
             "hashes": [
                 "sha256:5878d542a4b3f237e359926384f1dde4e099c9f5525d236b1840cf704fa8d474",
@@ -601,6 +608,14 @@
             ],
             "index": "pypi",
             "version": "==0.4.2"
+        },
+        "sphinxcontrib-apidoc": {
+            "hashes": [
+                "sha256:6671a46b2c6c5b0dca3d8a147849d159065e50443df79614f921b42fbd15cb09",
+                "sha256:729bf592cf7b7dd57c4c05794f732dc026127275d785c2a5494521fdde773fb9"
+            ],
+            "index": "pypi",
+            "version": "==0.3.0"
         },
         "sphinxcontrib-httpdomain": {
             "hashes": [
