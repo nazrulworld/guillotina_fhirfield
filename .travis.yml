@@ -1,14 +1,36 @@
 # Config file for automatic testing at travis-ci.org
-
+dist: xenial
 language: python
-python:
-  - 3.7
-  - 3.6
-  - 3.5
+sudo: required
+addons:
+  postgresql: 9.6
+matrix:
+  include:
+    - name: Python 3.6
+      python: 3.6
+      env: DATABASE=DUMMY
+    - name: Python 3.7
+      python: 3.7
+      env: DATABASE=DUMMY
 
-# Command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
-install: pip install -U tox-travis
+services:
+  - postgresql
+  - docker
+before_script:
+  - psql -c 'create database guillotina_fhirfield;' -U postgres
 
-# Command to run tests, e.g. python setup.py test
-script: tox
-
+cache:
+  directories:
+    - eggs
+install:
+  - pip install -U pipenv
+  - pipenv install --dev
+  - sleep 5
+script:
+  - make lint
+  - make clean
+  - make test
+after_success:
+  - make coverage
+  - pip install coveralls
+  - coveralls
