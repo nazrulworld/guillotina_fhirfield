@@ -79,7 +79,7 @@ def resource_type_to_model_cls(resource_type: str) -> Union[Invalid, type]:
     return import_string(dotted_path)
 
 
-def import_string(dotted_path: str) -> Union[Invalid, type]:
+def import_string(dotted_path: str) -> type:
     """Shameless hack from django utils, please don't mind!"""
     try:
         module_path, class_name = dotted_path.rsplit(".", 1)
@@ -102,7 +102,7 @@ def import_string(dotted_path: str) -> Union[Invalid, type]:
         )
         t, v, tb = sys.exc_info()
         try:
-            reraise(ImportError(msg), None, tb)
+            return reraise(ImportError(msg), None, tb)
         finally:
             del t, v, tb
 
@@ -180,29 +180,32 @@ def fhir_search_path_meta_info(path: str) -> Union[tuple, NoneType]:
 
 
 def filter_logic_in_path(raw_path: str) -> str:
-    """Seprates if any logic_in_path is provided"""
+    """Separates if any logic_in_path is provided"""
 
     # replace with unique
     replacer = "XXXXXXX"
+    as_match = PATH_WITH_DOT_AS.search(raw_path)
+    is_match = PATH_WITH_DOT_IS.search(raw_path)
+    where_match = PATH_WITH_DOT_IS.search(raw_path)
 
-    if PATH_WITH_DOT_AS.search(raw_path):
-        word = PATH_WITH_DOT_AS.search(raw_path).group()
+    if as_match:
+        word = as_match.group()
         path = raw_path.replace(word, replacer)
 
         new_word = word[4].upper() + word[5:-1]
         path = path.replace(replacer, new_word)
 
-    elif PATH_WITH_DOT_IS.search(raw_path):
+    elif is_match:
 
-        word = PATH_WITH_DOT_IS.search(raw_path).group()
+        word = is_match.group()
         path = raw_path.replace(word, replacer)
 
         new_word = word[4].upper() + word[5:-1]
         path = path.replace(replacer, new_word)
 
-    elif PATH_WITH_DOT_WHERE.search(raw_path):
+    elif where_match:
 
-        word = PATH_WITH_DOT_WHERE.search(raw_path).group()
+        word = where_match.group()
         path = raw_path.replace(word, "")
 
     else:

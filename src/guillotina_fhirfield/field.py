@@ -5,7 +5,6 @@ from typing import NewType
 
 import jsonpatch
 from fhirclient.models.fhirabstractbase import FHIRValidationError
-from fhirclient.models.resource import Resource
 from guillotina import configure
 from guillotina.configure.config import reraise
 from guillotina.interfaces import ISchemaFieldSerializeToJson
@@ -37,7 +36,7 @@ from .interfaces import IFhirResource
 
 __docformat__ = "restructuredtext"
 
-FhirResourceType = NewType('FhirResourceType', Resource)
+FhirResourceType = NewType('FhirResourceType', type)
 
 
 @implementer(IFhirFieldValue)
@@ -95,7 +94,7 @@ class FhirFieldValue(object):
             or ""
         )
 
-    def _validate_object(self, obj: FhirResourceType):  # noqa: E999
+    def _validate_object(self, obj: FhirResourceType = None):  # noqa: E999
         """ """
         if obj is None:
             return

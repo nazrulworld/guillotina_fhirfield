@@ -5,7 +5,6 @@
 
 import pickle
 
-import pytest
 from guillotina.component import get_multi_adapter
 from guillotina.component import get_utility
 from guillotina.component import query_adapter
@@ -18,7 +17,6 @@ from guillotina.interfaces import IValueToJson
 from guillotina.schema.exceptions import ConstraintNotSatisfied
 from guillotina.schema.exceptions import WrongContainedType
 from guillotina.schema.exceptions import WrongType
-from guillotina.schema.interfaces import IFromUnicode
 from zope.interface import Invalid
 from zope.interface import implementer
 
