@@ -31,6 +31,6 @@ script:
   - make clean
   - make test
 after_success:
-  - make coverage
   - pip install coveralls
+  - make coverage
   - coveralls
