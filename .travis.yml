@@ -30,6 +30,6 @@ install:
 script:
   - make lint
   - make clean
-  - pytest -s --cov=guillotina_fhirfield -s --tb=native -v --cov-report term-missing --cov-append guillotina_fhirfield
+  - pytest -s --cov=src/guillotina_fhirfield -s --tb=native -v --cov-report term-missing --cov-append src/guillotina_fhirfield
 after_success:
   - codecov
