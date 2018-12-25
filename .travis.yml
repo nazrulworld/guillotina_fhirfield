@@ -25,12 +25,11 @@ cache:
 install:
   - pip install -U pipenv
   - pipenv install --dev
+  - pip install codecov mypy
   - sleep 5
 script:
   - make lint
   - make clean
-  - make test
+  - pytest -s --cov=guillotina_fhirfield -s --tb=native -v --cov-report term-missing --cov-append guillotina_fhirfield
 after_success:
-  - pip install coveralls
-  - make coverage
-  - coveralls
+  - codecov
