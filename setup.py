@@ -59,6 +59,6 @@ setup(
           'test': test_requirements + setup_requirements
     },
     url='https://github.com/nazrulworld/guillotina_fhirfield',
-    version='0.1.0a1',
+    version='0.1.0a2.dev0',
     zip_safe=False,
 )
