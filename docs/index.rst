@@ -13,6 +13,8 @@ Welcome to guillotina_fhirfield's documentation!
    authors
    history
 
+.. include:: ../../README.rst
+
 Indices and tables
 ==================
 * :ref:`genindex`
