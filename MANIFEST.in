@@ -3,7 +3,7 @@ prune docs
 prune .github
 include AUTHORS.rst
 include CONTRIBUTING.rst
-include HISTORY.rst
+include CHANGES.rst
 include LICENSE
 include README.rst
 
@@ -11,4 +11,5 @@ recursive-include tests *
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
 
-exclude Makefile .editorconfig Pipfile* tox.ini
+exclude Makefile .editorconfig Pipfile* tox.ini .coveragerc .readthedocs.yml docs-requirements.txt
+
