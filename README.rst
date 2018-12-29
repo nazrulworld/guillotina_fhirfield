@@ -13,6 +13,9 @@ guillotina_fhirfield
         :target: https://guillotina-fhirfield.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
+.. image:: https://codecov.io/gh/nazrulworld/guillotina_fhirfield/branch/master/graph/badge.svg
+  :target: https://codecov.io/gh/nazrulworld/guillotina_fhirfield
+
 
 .. image:: https://pyup.io/repos/github/nazrulworld/guillotina_fhirfield/shield.svg
      :target: https://pyup.io/repos/github/nazrulworld/guillotina_fhirfield/

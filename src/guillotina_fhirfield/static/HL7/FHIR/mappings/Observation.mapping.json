@@ -1,0 +1,329 @@
+{
+    "mapping": {
+        "properties": {
+            "basedOn": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                },
+                "type": "nested"
+            },
+            "category": {
+                "properties": {
+                    "coding": {
+                        "properties": {
+                            "code": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            },
+                            "display": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            },
+                            "system": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            }
+                        },
+                        "type": "nested"
+                    },
+                    "text": {
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                },
+                "type": "nested"
+            },
+            "code": {
+                "properties": {
+                    "coding": {
+                        "properties": {
+                            "code": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            },
+                            "display": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            },
+                            "system": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            }
+                        },
+                        "type": "nested"
+                    },
+                    "text": {
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "context": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "dataAbsentReason": {
+                "properties": {
+                    "coding": {
+                        "properties": {
+                            "code": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            },
+                            "display": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            },
+                            "system": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            }
+                        },
+                        "type": "nested"
+                    },
+                    "text": {
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "device": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "id": {
+                "index": "not_analyzed",
+                "store": false,
+                "type": "string"
+            },
+            "identifier": {
+                "properties": {
+                    "system": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    },
+                    "type": {
+                        "properties": {
+                            "text": {
+                                "index": "analyzed",
+                                "store": false,
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "use": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    },
+                    "value": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                },
+                "type": "nested"
+            },
+            "meta": {
+                "properties": {
+                    "lastUpdated": {
+                        "format": "date_time_no_millis||date_optional_time",
+                        "store": false,
+                        "type": "date"
+                    },
+                    "profile": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    },
+                    "versionId": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "method": {
+                "properties": {
+                    "coding": {
+                        "properties": {
+                            "code": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            },
+                            "display": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            },
+                            "system": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            }
+                        },
+                        "type": "nested"
+                    },
+                    "text": {
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "performer": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                },
+                "type": "nested"
+            },
+            "resourceType": {
+                "index": "not_analyzed",
+                "store": false,
+                "type": "string"
+            },
+            "specimen": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "status": {
+                "index": "not_analyzed",
+                "store": false,
+                "type": "string"
+            },
+            "subject": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "valueCodeableConcept": {
+                "properties": {
+                    "coding": {
+                        "properties": {
+                            "code": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            },
+                            "display": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            },
+                            "system": {
+                                "index": "not_analyzed",
+                                "store": false,
+                                "type": "string"
+                            }
+                        },
+                        "type": "nested"
+                    },
+                    "text": {
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "valueDateTime": {
+                "format": "date_time_no_millis||date_optional_time",
+                "store": false,
+                "type": "date"
+            },
+            "valuePeriod": {
+                "properties": {
+                    "end": {
+                        "format": "date_time_no_millis||date_optional_time",
+                        "store": false,
+                        "type": "date"
+                    },
+                    "start": {
+                        "format": "date_time_no_millis||date_optional_time",
+                        "store": false,
+                        "type": "date"
+                    }
+                }
+            },
+            "valueQuantity": {
+                "properties": {
+                    "code": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    },
+                    "system": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    },
+                    "unit": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    },
+                    "value": {
+                        "store": false,
+                        "type": "float"
+                    }
+                }
+            },
+            "valueString": {
+                "index": "not_analyzed",
+                "store": false,
+                "type": "string"
+            }
+        }
+    },
+    "meta": {
+        "lastUpdated": "2018-10-25T20:48:34+02:00",
+        "versionId": "STU3"
+    },
+    "resourceType": "Observation"
+}

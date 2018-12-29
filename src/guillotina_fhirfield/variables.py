@@ -10,7 +10,7 @@ import os
 import pathlib
 from collections import defaultdict
 
-import ujson as json
+import ujson
 
 
 __author__ = 'Md Nazrul Islam <email2nazrul@gmail.com>'
@@ -37,25 +37,26 @@ ERROR_MESSAGES = {
     ERROR_PARAM_WRONG_DATATYPE: 'The value\'s data type is not excepted',
 }
 
-FHIR_RESOURCE_MODEL_CACHE = defaultdict()
+FHIR_RESOURCE_MODEL_CACHE: dict = defaultdict()
 
 FHIR_STATIC_DIR = pathlib.Path(os.path.abspath(__file__)).parent / 'static' / 'HL7' / 'FHIR'
 
 FHIR_RESOURCE_LIST_DIR = FHIR_STATIC_DIR / 'ResourceList'
+FHIR_RESOURCE_MAPPING_DIR = FHIR_STATIC_DIR / 'mappings'
 
 with io.open(
         str(FHIR_STATIC_DIR / 'search' / 'FHIR-Search-Parameter-Registry.json'),
         'r',
         encoding='utf8') as f:
 
-    FHIR_SEARCH_PARAMETER_REGISTRY = json.load(f)['object']
+    FHIR_SEARCH_PARAMETER_REGISTRY = ujson.load(f)['object']
 
 with io.open(
         str(FHIR_STATIC_DIR / 'search' / 'FHIR-Search-Parameter-Registry-searchable.json'),
         'r',
         encoding='utf8') as f:
 
-    FHIR_SEARCH_PARAMETER_SEARCHABLE = json.load(f)['searchable']
+    FHIR_SEARCH_PARAMETER_SEARCHABLE = ujson.load(f)['searchable']
     FHIR_SEARCH_PARAMETER_SEARCHABLE_KEYS = \
         FHIR_SEARCH_PARAMETER_SEARCHABLE.keys()
 
@@ -90,7 +91,7 @@ SEARCH_PARAM_MODIFIERS = (
 
 with open(str(FHIR_RESOURCE_LIST_DIR / '{0}.json'.format(FHIR_VERSION)), 'r', encoding='utf8') as f:
     """ """
-    FHIR_RESOURCE_LIST = json.load(f)['resources']
+    FHIR_RESOURCE_LIST = ujson.load(f)['resources']
 
 
 FHIR_ES_MAPPINGS_CACHE: dict = {}  # noqa: E999

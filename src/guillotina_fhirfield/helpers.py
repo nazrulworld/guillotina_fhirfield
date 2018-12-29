@@ -5,10 +5,13 @@ import json
 import pkgutil
 import re
 import sys
+import io
 import time
 from importlib import import_module
 from typing import Union
 from urllib.parse import unquote_plus
+import warnings
+import ujson
 
 from guillotina.configure.config import reraise
 from zope.interface import Invalid
@@ -19,6 +22,8 @@ from .variables import FHIR_RESOURCE_LIST  # noqa: F401
 from .variables import FHIR_RESOURCE_MODEL_CACHE  # noqa: F401
 from .variables import FHIR_SEARCH_PARAMETER_SEARCHABLE
 from .variables import NO_VALUE
+from .variables import FHIR_ES_MAPPINGS_CACHE
+from .variables import FHIR_RESOURCE_MAPPING_DIR
 
 
 __docformat__ = "restructuredtext"
@@ -288,3 +293,42 @@ def parse_query_string(request, allow_none=False):
         params.append((param_name, value))
 
     return params
+
+
+def fhir_resource_mapping(resource_type: str, cache: bool = True) -> dict:
+    """"""
+    if resource_type in FHIR_ES_MAPPINGS_CACHE and cache:
+
+        return FHIR_ES_MAPPINGS_CACHE[resource_type]
+
+    try:
+        FHIR_RESOURCE_LIST[resource_type.lower()]
+    except KeyError:
+        msg = f'{resource_type} is not valid FHIR resource type'
+
+        t, v, tb = sys.exc_info()
+        try:
+            reraise(Invalid(msg), None, tb)
+        finally:
+            del t, v, tb
+    mapping_json = FHIR_RESOURCE_MAPPING_DIR / f'{resource_type}.mapping.json'
+
+    if not mapping_json.exists():
+
+        warnings.warn(
+            f'Mapping for {resource_type} is currently not supported,'
+            ' default Resource\'s mapping is used instead!', UserWarning)
+
+        return fhir_resource_mapping('Resource', cache=True)
+
+    with io.open(str(mapping_json), 'r', encoding='utf8') as f:
+
+        mapping_dict = ujson.load(f)
+        # xxx: validate mapping_dict['meta']['profile']?
+
+        FHIR_ES_MAPPINGS_CACHE[resource_type] = mapping_dict['mapping']
+
+    return FHIR_ES_MAPPINGS_CACHE[resource_type]
+
+
+

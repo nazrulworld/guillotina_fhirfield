@@ -1,0 +1,141 @@
+{
+    "mapping": {
+        "properties": {
+            "action": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                },
+                "type": "nested"
+            },
+            "assessor": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "context": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "date": {
+                "format": "date_time_no_millis||date_optional_time",
+                "store": false,
+                "type": "date"
+            },
+            "id": {
+                "index": "not_analyzed",
+                "store": false,
+                "type": "string"
+            },
+            "identifier": {
+                "properties": {
+                    "system": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    },
+                    "type": {
+                        "properties": {
+                            "text": {
+                                "index": "analyzed",
+                                "store": false,
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "use": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    },
+                    "value": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                },
+                "type": "nested"
+            },
+            "meta": {
+                "properties": {
+                    "lastUpdated": {
+                        "format": "date_time_no_millis||date_optional_time",
+                        "store": false,
+                        "type": "date"
+                    },
+                    "profile": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    },
+                    "versionId": {
+                        "index": "not_analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "previous": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            },
+            "problem": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                },
+                "type": "nested"
+            },
+            "resourceType": {
+                "index": "not_analyzed",
+                "store": false,
+                "type": "string"
+            },
+            "status": {
+                "index": "not_analyzed",
+                "store": false,
+                "type": "string"
+            },
+            "subject": {
+                "properties": {
+                    "reference": {
+                        "analyzer": "keyword",
+                        "index": "analyzed",
+                        "store": false,
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    },
+    "meta": {
+        "lastUpdated": "2018-10-25T20:48:34+02:00",
+        "versionId": "STU3"
+    },
+    "resourceType": "ClinicalImpression"
+}
