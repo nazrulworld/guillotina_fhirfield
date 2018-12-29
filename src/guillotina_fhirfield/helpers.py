@@ -1,29 +1,30 @@
 # _*_ coding: utf-8 _*_
 """ """
 import inspect
+import io
 import json
 import pkgutil
 import re
 import sys
-import io
 import time
+import warnings
 from importlib import import_module
 from typing import Union
 from urllib.parse import unquote_plus
-import warnings
-import ujson
 
 from guillotina.configure.config import reraise
 from zope.interface import Invalid
 
+import ujson
+
 from .exc import SearchQueryError
 from .variables import EMPTY_STRING
+from .variables import FHIR_ES_MAPPINGS_CACHE
 from .variables import FHIR_RESOURCE_LIST  # noqa: F401
+from .variables import FHIR_RESOURCE_MAPPING_DIR
 from .variables import FHIR_RESOURCE_MODEL_CACHE  # noqa: F401
 from .variables import FHIR_SEARCH_PARAMETER_SEARCHABLE
 from .variables import NO_VALUE
-from .variables import FHIR_ES_MAPPINGS_CACHE
-from .variables import FHIR_RESOURCE_MAPPING_DIR
 
 
 __docformat__ = "restructuredtext"
@@ -329,6 +330,3 @@ def fhir_resource_mapping(resource_type: str, cache: bool = True) -> dict:
         FHIR_ES_MAPPINGS_CACHE[resource_type] = mapping_dict['mapping']
 
     return FHIR_ES_MAPPINGS_CACHE[resource_type]
-
-
-

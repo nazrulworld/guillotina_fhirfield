@@ -3,13 +3,12 @@
 
 """Tests for `guillotina_fhirfield.helpers` package."""
 import pytest
+from zope.interface import Invalid
+
 import ujson
-
-from zope.interface import  Invalid
-
 from guillotina_fhirfield.helpers import fhir_resource_mapping
-from guillotina_fhirfield.variables import FHIR_RESOURCE_MAPPING_DIR
 from guillotina_fhirfield.variables import FHIR_ES_MAPPINGS_CACHE
+from guillotina_fhirfield.variables import FHIR_RESOURCE_MAPPING_DIR
 
 
 async def test_fhir_resource_mapping(dummy_guillotina):  # noqa: C901,E999
@@ -39,4 +38,3 @@ async def test_fhir_resource_mapping(dummy_guillotina):  # noqa: C901,E999
     with pytest.raises(Invalid):
 
         fhir_resource_mapping('FakeResource')
-

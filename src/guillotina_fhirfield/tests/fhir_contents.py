@@ -1,12 +1,12 @@
 from guillotina import configure
-from guillotina.directives import index_field
-from guillotina_elasticsearch.directives import index
 from guillotina.content import Folder
+from guillotina.directives import index_field
 from guillotina.interfaces import IResource
-from guillotina_fhirfield.helpers import fhir_resource_mapping
+from guillotina_elasticsearch.directives import index
 from guillotina_elasticsearch.interfaces import IContentIndex
 
 from guillotina_fhirfield.field import FhirField
+from guillotina_fhirfield.helpers import fhir_resource_mapping
 
 
 class IOrganization(IResource, IContentIndex):
