@@ -5,6 +5,7 @@
 
 import pickle
 
+import pytest
 from guillotina.component import get_multi_adapter
 from guillotina.component import get_utility
 from guillotina.component import query_adapter
@@ -23,8 +24,11 @@ from zope.interface import implementer
 import ujson as json
 from guillotina_fhirfield.field import FhirField
 from guillotina_fhirfield.field import FhirFieldValue
+from guillotina_fhirfield.field import fhir_field_from_resource_type
+from guillotina_fhirfield.field import fhir_field_from_schema
 from guillotina_fhirfield.helpers import parse_json_str
 from guillotina_fhirfield.helpers import resource_type_to_model_cls
+from guillotina_fhirfield.interfaces import IFhirField
 from guillotina_fhirfield.interfaces import IFhirFieldValue
 from guillotina_fhirfield.interfaces import IFhirResource
 
@@ -631,3 +635,35 @@ async def test_factory_serializer_with_fhir_field(dummy_request):
     serialized_factory = await serializer()
     assert 'organization_resource' in serialized_factory['properties']
     assert 'organization_resource' in serialized_factory['required']
+
+
+async def test_fhir_field_from_schema(dummy_guillotina):
+    """ """
+
+    expected_fhir_field = fhir_field_from_schema(IOrganization, 'Organization')
+
+    assert expected_fhir_field is not None
+
+    assert IFhirField.providedBy(expected_fhir_field)
+    # test with mismatched resource type
+    assert fhir_field_from_schema(IOrganization, 'Patient') is None
+
+
+async def test_fhir_field_from_resource_type(dummy_guillotina):
+    """ """
+
+    fields = fhir_field_from_resource_type('Organization')
+    """{
+            'organization_resource': {
+                'field': <guillotina_fhirfield.field.FhirField object at 0x7f214c54dfd0>,
+                'types': ['Organization']
+            }
+        }"""
+    assert len(fields) == 1
+    assert 'organization_resource' in fields
+
+    # test non existing
+    assert fhir_field_from_resource_type('Patient') is None
+
+    with pytest.raises(Invalid):
+        fhir_field_from_resource_type('FakeResource')

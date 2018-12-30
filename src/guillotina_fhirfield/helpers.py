@@ -71,7 +71,7 @@ def search_fhir_model(model_name: str, cache: bool = True) -> Union[str, NoneTyp
 
             if klass_name == model_name:
                 FHIR_RESOURCE_MODEL_CACHE[model_name] = module_name
-                return "{0}.{1}".format(module_name, model_name)
+                return f"{module_name}.{model_name}"
 
     return None
 
@@ -330,3 +330,21 @@ def fhir_resource_mapping(resource_type: str, cache: bool = True) -> dict:
         FHIR_ES_MAPPINGS_CACHE[resource_type] = mapping_dict['mapping']
 
     return FHIR_ES_MAPPINGS_CACHE[resource_type]
+
+
+def validate_resource_type(resource_type: str) -> NoneType:
+    """FHIR resource type validation"""
+
+    try:
+        FHIR_RESOURCE_LIST[resource_type.lower()]
+    except KeyError:
+        msg = (
+            f"{resource_type} is not valid FHIR Resource! "
+            "@see: https://hl7.org/fhir/"
+        )
+
+        t, v, tb = sys.exc_info()
+        try:
+            reraise(Invalid(msg), None, tb)
+        finally:
+            del t, v, tb

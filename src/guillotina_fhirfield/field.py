@@ -2,15 +2,20 @@
 import sys
 from collections import OrderedDict
 from typing import NewType
+from typing import Union
 
 import jsonpatch
 from fhirclient.models.fhirabstractbase import FHIRValidationError
 from guillotina import configure
+from guillotina import directives
+from guillotina.component import get_utilities_for
 from guillotina.configure.config import reraise
+from guillotina.interfaces import IResourceFactory
 from guillotina.interfaces import ISchemaFieldSerializeToJson
 from guillotina.json.serialize_schema_field import DefaultSchemaFieldSerializer
 from guillotina.schema import Object
 from guillotina.schema import get_fields
+from guillotina.schema import get_fields_in_order
 from guillotina.schema.exceptions import ConstraintNotSatisfied
 from guillotina.schema.exceptions import WrongContainedType
 from guillotina.schema.exceptions import WrongType
@@ -29,6 +34,7 @@ import ujson
 from .helpers import import_string
 from .helpers import parse_json_str
 from .helpers import resource_type_to_model_cls
+from .helpers import validate_resource_type
 from .interfaces import IFhirField
 from .interfaces import IFhirFieldValue
 from .interfaces import IFhirResource
@@ -491,3 +497,86 @@ class DefaultFhirFieldSchemaSerializer(DefaultSchemaFieldSerializer):
     @property
     def field_type(self):
         return 'FhirField'
+
+
+def fhir_field_from_schema(
+        schema: Interface,
+        resource_type: str = None) -> Union[FhirField, None]:
+    """ """
+    index_fields: dict
+
+    if resource_type:
+        index_fields = directives.merged_tagged_value_dict(
+            schema, directives.index.key)
+
+    for name, field in get_fields_in_order(schema):
+
+        if IFhirField.providedBy(field):
+            if resource_type:
+                catalog_info = index_fields.get(name, None)
+                if catalog_info is None:
+                    continue
+                if catalog_info.get('resource_type', None) is None:
+                    continue
+
+                if catalog_info['resource_type'] != resource_type:
+                    continue
+
+            return field
+
+    return None
+
+
+_RESOURCE_TYPE_TO_FHIR_FIELD_CACHE: dict = {}
+
+
+def fhir_field_from_resource_type(
+        resource_type: str,
+        cache: bool = True) -> Union[dict, None]:
+    """ """
+    global _RESOURCE_TYPE_TO_FHIR_FIELD_CACHE
+
+    if cache and resource_type in _RESOURCE_TYPE_TO_FHIR_FIELD_CACHE:
+
+        return _RESOURCE_TYPE_TO_FHIR_FIELD_CACHE[resource_type]
+
+    validate_resource_type(resource_type)
+
+    factories = [x[1] for x in get_utilities_for(IResourceFactory)]
+
+    fields: dict = {}
+
+    for factory in factories:
+        field = fhir_field_from_schema(factory.schema, resource_type)
+
+        if field is not None:
+
+            if field.getName() not in fields:
+                fields[field.getName()] = {
+                    'field': field,
+                    'types': list()
+                }
+            if factory.type_name not in fields[field.getName()]['types']:
+                fields[field.getName()]['types'].append(factory.type_name)
+
+            break
+
+        # Try find from behavior
+        for schema in factory.behaviors or ():
+            field = fhir_field_from_schema(schema)
+            if field is not None:
+                if field.__name__ not in fields:
+                    fields[field.__name__] = {
+                        'field': field,
+                        'types': list()
+                    }
+                if factory.type_name not in fields[field.__name__]['types']:
+                    fields[field.__name__]['types'].append(factory.type_name)
+
+    if fields:
+        # xxx: do validation over multiple fields or other stuff?
+        _RESOURCE_TYPE_TO_FHIR_FIELD_CACHE[resource_type] = fields
+
+        return _RESOURCE_TYPE_TO_FHIR_FIELD_CACHE[resource_type]
+
+    return None
