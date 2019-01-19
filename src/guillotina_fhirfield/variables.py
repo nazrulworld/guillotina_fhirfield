@@ -37,7 +37,7 @@ ERROR_MESSAGES = {
     ERROR_PARAM_WRONG_DATATYPE: 'The value\'s data type is not excepted',
 }
 
-FHIR_RESOURCE_MODEL_CACHE: dict = defaultdict()
+FHIR_RESOURCE_CLASS_CACHE: dict = defaultdict()
 
 FHIR_STATIC_DIR = pathlib.Path(os.path.abspath(__file__)).parent / 'static' / 'HL7' / 'FHIR'
 

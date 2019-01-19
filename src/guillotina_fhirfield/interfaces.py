@@ -46,12 +46,12 @@ class IFhirField(IObject):
         title='FHIR Resource Type',
         required=False,
     )
-    model = DottedName(
-        title='FHIR Resource Model from fhirclient',
+    resource_class = DottedName(
+        title='FHIR Resource class from fhir.resources',
         required=False,
     )
-    model_interface = DottedName(
-        title='FHIR Model Interface',
+    resource_interface = DottedName(
+        title='FHIR Resource Interface',
         required=False,
     )
 

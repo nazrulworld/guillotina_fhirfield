@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # @todo: https://github.com/stefankoegl/python-json-patch/blob/master/setup.py
+# @todo: https://pypi.org/project/multidict/
 """The setup script."""
 
 from setuptools import setup, find_packages
@@ -11,7 +12,12 @@ with open('README.rst') as readme_file:
 with open('CHANGES.rst') as history_file:
     history = history_file.read()
 
-requirements = ['Click>=6.0', 'guillotina>=4.3.5', 'fhirclient', 'jsonpatch']
+requirements = [
+    'Click>=6.0',
+    'guillotina>=4.3.5',
+    # important! STU3
+    'fhir.resources==3.0.1',
+    'jsonpatch']
 
 setup_requirements = ['pytest-runner', ]
 

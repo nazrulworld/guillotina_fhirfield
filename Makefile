@@ -57,7 +57,7 @@ isort: ## run isort recursively
 	isort src/guillotina_fhirfield -rc
 
 test: ## run tests quickly with the default Python
-	py.test
+	py.test src/guillotina_fhirfield
 
 test-all: ## run tests on every Python version with tox
 	tox

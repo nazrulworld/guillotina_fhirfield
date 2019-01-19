@@ -4,7 +4,7 @@
 def patch_fhir_base_model():
     """" """
     from zope.interface import implementer
-    import fhirclient.models.resource as fmr
+    import fhir.resources.resource as fmr
     from guillotina_fhirfield.interfaces import IFhirResource
     # We force implement IFhirResource
     fmr.Resource = \

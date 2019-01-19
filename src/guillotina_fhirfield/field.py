@@ -5,7 +5,7 @@ from typing import NewType
 from typing import Union
 
 import jsonpatch
-from fhirclient.models.fhirabstractbase import FHIRValidationError
+from fhir.resources.fhirabstractbase import FHIRValidationError
 from guillotina import configure
 from guillotina import directives
 from guillotina.component import get_utilities_for
@@ -33,7 +33,7 @@ import ujson
 
 from .helpers import import_string
 from .helpers import parse_json_str
-from .helpers import resource_type_to_model_cls
+from .helpers import resource_type_to_resource_cls
 from .helpers import validate_resource_type
 from .interfaces import IFhirField
 from .interfaces import IFhirFieldValue
@@ -48,7 +48,7 @@ FhirResourceType = NewType('FhirResourceType', type)
 @implementer(IFhirFieldValue)
 class FhirFieldValue(object):
     """FhirResourceValue is a proxy class for holding any object derrived from
-    fhirclient.models.resource.Resource"""
+    fhir.resources.resource.Resource"""
 
     __slot__ = ("_resource_obj",)
 
@@ -117,7 +117,7 @@ class FhirFieldValue(object):
                 del t, v, tb
 
         except DoesNotImplement:
-            msg = "Object must be derived from valid FHIR resource model class!"
+            msg = "Object must be derived from valid FHIR resource class!"
             msg += "But it is found that object is derived from `{0}`".format(
                 obj.__class__.__module__ + "." + obj.__class__.__name__
             )
@@ -206,31 +206,28 @@ class FhirField(Object):
     """FhirResource also known as FHIR field is the schema field derrived from z3c.form's field.
 
     It takes all initilial arguments those are derrived from standard schema field, with additionally
-    ``model``, ``resource_type`` and ``model_interface``
+    ``model``, ``resource_type`` and ``resource_interface``
 
     .. note::
         field name must be start with lowercase name of FHIR Resource.
     """
 
     _type = FhirFieldValue
-    _model_class = None
-    _model_interface_class = None
+    _resource_class = None
+    _resource_interface_class = None
 
-    def __init__(self, model=None, model_interface=None, resource_type=None, **kw):
+    def __init__(self, resource_class=None, resource_interface=None, resource_type=None, **kw):
         """
-        :arg model: dotted path of FHIR Model class
+        :arg resource_class: dotted path of FHIR Resource class
 
         :arg resource_type:
 
-        :arg model_interface
+        :arg resource_interface
         """
 
         self.schema = IFhirFieldValue
-        # self.model = model
-        # self.resource_type = resource_type
-        # self.model_interface = model_interface
 
-        self._init(model, model_interface, resource_type, **kw)
+        self._init(resource_class, resource_interface, resource_type, **kw)
 
         if "default" in kw:
             default = kw["default"]
@@ -259,7 +256,7 @@ class FhirField(Object):
         self.validate(value)
         return value
 
-    def _init(self, model, model_interface, resource_type, **kw):
+    def _init(self, resource_class, resource_interface, resource_type, **kw):
         """ """
 
         if "default" in kw:
@@ -276,20 +273,20 @@ class FhirField(Object):
 
         field_attributes = get_fields(IFhirField)
 
-        attribute = field_attributes['model'].bind(self)
-        if model is None:
-            attribute.validate(model)
+        attribute = field_attributes['resource_class'].bind(self)
+        if resource_class is None:
+            attribute.validate(resource_class)
             attribute_val = None
         else:
-            attribute_val = attribute.from_unicode(model)
+            attribute_val = attribute.from_unicode(resource_class)
         attribute.set(self, attribute_val)
 
-        attribute = field_attributes['model_interface'].bind(self)
-        if model_interface is None:
-            attribute.validate(model_interface)
+        attribute = field_attributes['resource_interface'].bind(self)
+        if resource_interface is None:
+            attribute.validate(resource_interface)
             attribute_val = None
         else:
-            attribute_val = attribute.from_unicode(model_interface)
+            attribute_val = attribute.from_unicode(resource_interface)
         attribute.set(self, attribute_val)
 
         attribute = field_attributes['resource_type'].bind(self)
@@ -300,17 +297,17 @@ class FhirField(Object):
             attribute_val = attribute.from_unicode(resource_type)
         attribute.set(self, attribute_val)
 
-        if self.resource_type and self.model is not None:
+        if self.resource_type and self.resource_class is not None:
             raise Invalid(
-                "Either `model` or `resource_type` value is acceptable! you cannot provide both!"
+                "Either `resource_class` or `resource_type` value is acceptable! you cannot provide both!"
             )
 
-        if self.model:
+        if self.resource_class:
             try:
-                klass = import_string(self.model)
+                klass = import_string(self.resource_class)
             except ImportError:
-                msg = "Invalid FHIR Resource Model `{0}`! Please check the module or class name.".format(
-                    self.model
+                msg = "Invalid FHIR Resource class `{0}`! Please check the module or class name.".format(
+                    self.resource_class
                 )
 
                 t, v, tb = sys.exc_info()
@@ -322,16 +319,16 @@ class FhirField(Object):
             if not IFhirResource.implementedBy(klass):
 
                 raise Invalid(
-                    "{0!r} must be valid model class from fhirclient.model".format(
+                    "{0!r} must be valid resource class from fhir.resources".format(
                         klass
                     )
                 )
-            self._model_class = klass
+            self._resource_class = klass
 
         if self.resource_type:
 
             try:
-                self._model_class = resource_type_to_model_cls(self.resource_type)
+                self._resource_class = resource_type_to_resource_cls(self.resource_type)
             except ImportError:
                 msg = "{0} is not valid fhir resource type!".format(self.resource_type)
                 t, v, tb = sys.exc_info()
@@ -341,12 +338,12 @@ class FhirField(Object):
                     del t, v, tb
                 raise Invalid(msg)
 
-        if self.model_interface:
+        if self.resource_interface:
             try:
-                klass = import_string(self.model_interface)
+                klass = import_string(self.resource_interface)
             except ImportError:
-                msg = "Invalid FHIR Model Interface`{0}`! Please check the module or class name.".format(
-                    self.model_interface
+                msg = "Invalid FHIR Resource Interface`{0}`! Please check the module or class name.".format(
+                    self.resource_interface
                 )
                 t, v, tb = sys.exc_info()
                 try:
@@ -365,7 +362,7 @@ class FhirField(Object):
 
                 raise Invalid(msg)
 
-            self._model_interface_class = klass
+            self._resource_interface_class = klass
 
     def _pre_value_validate(self, fhir_json):
         """ """
@@ -390,16 +387,16 @@ class FhirField(Object):
     def _from_dict(self, dict_value):
         """ """
         self._pre_value_validate(dict_value)
-        klass = self._model_class
+        klass = self._resource_class
 
         if klass is None:
             # relay on json value for resource type
-            klass = resource_type_to_model_cls(dict_value["resourceType"])
+            klass = resource_type_to_resource_cls(dict_value["resourceType"])
 
         # check constraint
         if klass.resource_type != dict_value.get("resourceType"):
             raise ConstraintNotSatisfied(
-                "Fhir Model mismatched with provided resource type!\n"
+                "Fhir Resource mismatched with provided resource type!\n"
                 "`{0}` resource type is permitted but got `{1}`".format(
                     klass.resource_type, dict_value.get("resourceType")
                 )
@@ -413,10 +410,10 @@ class FhirField(Object):
         """ """
         super(FhirField, self)._validate(value)
 
-        if self.model_interface:
+        if self.resource_interface:
             try:
                 verifyObject(
-                    self._model_interface_class,
+                    self._resource_interface_class,
                     value.foreground_origin(),
                     False)
 
@@ -434,8 +431,8 @@ class FhirField(Object):
             )
             raise ConstraintNotSatisfied(msg)
 
-        if self.model:
-            klass = self._model_class
+        if self.resource_class:
+            klass = self._resource_class
 
             if value.foreground_origin() is not None and not isinstance(
                 value.foreground_origin(), klass

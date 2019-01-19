@@ -27,7 +27,7 @@ from guillotina_fhirfield.field import FhirFieldValue
 from guillotina_fhirfield.field import fhir_field_from_resource_type
 from guillotina_fhirfield.field import fhir_field_from_schema
 from guillotina_fhirfield.helpers import parse_json_str
-from guillotina_fhirfield.helpers import resource_type_to_model_cls
+from guillotina_fhirfield.helpers import resource_type_to_resource_cls
 from guillotina_fhirfield.interfaces import IFhirField
 from guillotina_fhirfield.interfaces import IFhirFieldValue
 from guillotina_fhirfield.interfaces import IFhirResource
@@ -51,8 +51,8 @@ async def test_field_init_validate(dummy_guillotina):  # noqa: C901,E999
     try:
         FhirField(
             title="Organization resource",
-            model="fhirclient.models.organization.Organization",
-            model_interface="guillotina_fhirfield.interfaces.IFhirResource",
+            resource_class="fhir.resources.organization.Organization",
+            resource_interface="guillotina_fhirfield.interfaces.IFhirResource",
         )
     except Invalid as exc:
         raise AssertionError(
@@ -75,7 +75,7 @@ async def test_field_init_validate(dummy_guillotina):  # noqa: C901,E999
         FhirField(
             title="Organization resource",
             resource_type="Organization",
-            model="fhirclient.models.organization.Organization",
+            resource_class="fhir.resources.organization.Organization",
         )
         raise AssertionError("Code should not come here! as should be invalid error")
     except Invalid:
@@ -85,7 +85,7 @@ async def test_field_init_validate(dummy_guillotina):  # noqa: C901,E999
     try:
         FhirField(
             title="Organization resource",
-            model="fake.fake.models.organization.Organization",
+            resource_class="fake.fake.models.organization.Organization",
         )
         raise AssertionError("Code should not come here! as should be invalid error")
     except Invalid:
@@ -93,10 +93,10 @@ async def test_field_init_validate(dummy_guillotina):  # noqa: C901,E999
 
     # test with invalid fhir model
     try:
-        FhirField(title="Organization resource", model="guillotina.content.Resource")
+        FhirField(title="Organization resource", resource_class="guillotina.content.Resource")
         raise AssertionError("Code should not come here! as should be invalid error")
     except Invalid as exc:
-        assert "must be valid model class from fhirclient.model" in str(exc)
+        assert "must be valid resource class from fhir.resources" in str(exc)
 
     # test with invalid ResourceType
     try:
@@ -109,7 +109,7 @@ async def test_field_init_validate(dummy_guillotina):  # noqa: C901,E999
     try:
         FhirField(
             title="Organization resource",
-            model_interface="guillotina_fhirfield.interfaces.IFhirFieldValue",
+            resource_interface="guillotina_fhirfield.interfaces.IFhirFieldValue",
         )
         raise AssertionError(
             "Code should not come here! as wrong subclass of interface is provided"
@@ -125,7 +125,7 @@ async def test_field_init_validation_with_noninterface(dummy_guillotina):
     try:
         FhirField(
             title="Organization resource",
-            model_interface="guillotina_fhirfield.tests.helpers.NoneInterfaceClass",
+            resource_interface="guillotina_fhirfield.tests.helpers.NoneInterfaceClass",
         )
         raise AssertionError(
             "Code should not come here! as wrong interface class is provided"
@@ -140,13 +140,13 @@ async def test_field_init_validation_with_wrong_dotted_path(dummy_guillotina):
     try:
         FhirField(
             title="Organization resource",
-            model_interface="fake.tests.NoneInterfaceClass",
+            resource_interface="fake.tests.NoneInterfaceClass",
         )
         raise AssertionError(
             "Code should not come here! as wrong interface class is provided"
         )
     except Invalid as exc:
-        assert "Invalid FHIR Model Interface" in str(exc)
+        assert "Invalid FHIR Resource Interface" in str(exc)
 
 
 async def test_field_pre_value_validate(dummy_guillotina):
@@ -195,7 +195,7 @@ async def test_field_validate(dummy_guillotina):
     with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
         json_dict = json.load(f)
 
-    organization = resource_type_to_model_cls("Organization")(json_dict)
+    organization = resource_type_to_resource_cls("Organization")(json_dict)
     fhir_resource_value = FhirFieldValue(obj=organization)
 
     fhir_field = FhirField(title="Organization resource")
@@ -229,7 +229,7 @@ async def test_field_validate(dummy_guillotina):
     fhir_resource_value.address = address_
     # Test model constraint
     fhir_field = FhirField(
-        title="Organization resource", model="fhirclient.models.task.Task"
+        title="Organization resource", resource_class="fhir.resources.task.Task"
     )
 
     try:
@@ -250,7 +250,7 @@ async def test_field_validate(dummy_guillotina):
     # Wrong interface attributes
     fhir_field = FhirField(
         title="Organization resource",
-        model_interface="guillotina_fhirfield.tests.helpers.IWrongInterface",
+        resource_interface="guillotina_fhirfield.tests.helpers.IWrongInterface",
     )
 
     try:
@@ -269,7 +269,7 @@ async def test_field_from_dict(dummy_guillotina):
 
     fhir_field = FhirField(
         title="Organization resource",
-        model="fhirclient.models.organization.Organization",
+        resource_class="fhir.resources.organization.Organization",
     )
 
     try:
@@ -316,7 +316,7 @@ async def test_field_from_dict(dummy_guillotina):
 
     # Test constraint
     fhir_field = FhirField(
-        title="Organization resource", model="fhirclient.models.task.Task"
+        title="Organization resource", resource_class="fhir.resources.task.Task"
     )
 
     try:
@@ -325,7 +325,7 @@ async def test_field_from_dict(dummy_guillotina):
             "Code should not come here as required fhir model is mismatched with provided resourcetype"
         )
     except ConstraintNotSatisfied as exc:
-        assert "Fhir Model mismatched" in str(exc)
+        assert "Fhir Resource mismatched" in str(exc)
 
 
 async def test_field_from_unicode(dummy_guillotina):
@@ -335,7 +335,7 @@ async def test_field_from_unicode(dummy_guillotina):
 
     fhir_field = FhirField(
         title="Organization resource",
-        model="fhirclient.models.organization.Organization",
+        resource_class="fhir.resources.organization.Organization",
     )
 
     try:
@@ -362,7 +362,7 @@ async def test_field_from_unicode_with_empty_str(dummy_guillotina):
     """ """
     fhir_field = FhirField(
         title="Organization resource",
-        model="fhirclient.models.organization.Organization",
+        resource_class="fhir.resources.organization.Organization",
         required=False,
     )
 
@@ -377,14 +377,14 @@ async def test_field_default_value(dummy_guillotina):
 
     fhir_field = FhirField(
         title="Organization resource",
-        model="fhirclient.models.organization.Organization",
+        resource_class="fhir.resources.organization.Organization",
         default=json_dict,
     )
     assert json_dict == fhir_field.default.as_json()
 
     fhir_field2 = FhirField(
         title="Organization resource",
-        model="fhirclient.models.organization.Organization",
+        resource_class="fhir.resources.organization.Organization",
         default=json.dumps(json_dict),
     )
 
@@ -392,7 +392,7 @@ async def test_field_default_value(dummy_guillotina):
 
     fhir_field3 = FhirField(
         title="Organization resource",
-        model="fhirclient.models.organization.Organization",
+        resource_class="fhir.resources.organization.Organization",
         default=None,
     )
     assert fhir_field3.default is None
@@ -403,7 +403,7 @@ async def test_field_with_wrong_default_value(dummy_guillotina):
     try:
         FhirField(
             title="Organization resource",
-            model="fhirclient.models.organization.Organization",
+            resource_class="fhir.resources.organization.Organization",
             default=False,
         )
     except Invalid as exc:
@@ -411,7 +411,7 @@ async def test_field_with_wrong_default_value(dummy_guillotina):
     try:
         FhirField(
             title="Organization resource",
-            model="fhirclient.models.organization.Organization",
+            resource_class="fhir.resources.organization.Organization",
             default={"id": "I am wrong FHIR"},
         )
     except Invalid as exc:
@@ -428,7 +428,7 @@ async def test_field_resource_type_constraint(dummy_guillotina):
         fhir_field.from_dict(json_dict)
     except Invalid as e:
         assert e.__class__.__name__ == "ConstraintNotSatisfied"
-        assert "Fhir Model mismatched" in str(e)
+        assert "Fhir Resource mismatched" in str(e)
 
 
 async def test_fhir_field_value(dummy_guillotina):
@@ -436,7 +436,7 @@ async def test_fhir_field_value(dummy_guillotina):
     with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
         fhir_json = json.load(f)
 
-    model = resource_type_to_model_cls(fhir_json["resourceType"])
+    model = resource_type_to_resource_cls(fhir_json["resourceType"])
     fhir_resource = model(fhir_json)
     fhir_resource_value = FhirFieldValue(obj=fhir_resource)
 
@@ -546,7 +546,7 @@ async def test_fhir_field_value_pickling(dummy_guillotina):
     with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
         fhir_json = json.load(f)
 
-    model = resource_type_to_model_cls(fhir_json["resourceType"])
+    model = resource_type_to_resource_cls(fhir_json["resourceType"])
     fhir_resource = model(fhir_json)
     fhir_resource_value = FhirFieldValue(obj=fhir_resource)
 
@@ -561,7 +561,7 @@ async def test_fhir_field_value_serializer(dummy_request):
     with open(str(FHIR_FIXTURE_PATH / "Organization.json"), "r") as f:
         fhir_json = json.load(f)
 
-    model = resource_type_to_model_cls(fhir_json["resourceType"])
+    model = resource_type_to_resource_cls(fhir_json["resourceType"])
     fhir_resource = model(fhir_json)
     value = FhirFieldValue(obj=fhir_resource)
 
@@ -580,7 +580,7 @@ async def test_fhir_field_deserializer(dummy_request):
 
     fhir_field = FhirField(
         title="Organization resource",
-        model="fhirclient.models.organization.Organization",
+        resource_class="fhir.resources.organization.Organization",
         required=False,
     )
 
@@ -601,7 +601,7 @@ async def test_fhir_field_schema_serializer(dummy_request):
     """ """
     fhir_field = FhirField(
         title="Organization resource",
-        model="fhirclient.models.organization.Organization",
+        resource_class="fhir.resources.organization.Organization",
     )
 
     serializer = get_multi_adapter(
@@ -610,7 +610,7 @@ async def test_fhir_field_schema_serializer(dummy_request):
 
     schema_json = await serializer()
     assert schema_json['type'] == 'FhirField'
-    assert schema_json['model'] == 'fhirclient.models.organization.Organization'
+    assert schema_json['resource_class'] == 'fhir.resources.organization.Organization'
 
 
 async def test_schema_serializer_with_fhir_field(dummy_request):
@@ -667,3 +667,22 @@ async def test_fhir_field_from_resource_type(dummy_guillotina):
 
     with pytest.raises(Invalid):
         fhir_field_from_resource_type('FakeResource')
+
+
+# async def test_query_builder(container_requester):
+#     """Check list of content types."""
+#
+#     async with container_requester as requester:
+#         data = (
+#             ('part-of:missing', 'true'),
+#             ('identifier', 'CPR|240365-0002'),
+#             ('identifier', 'CPR|240365-0001'),
+#             ('price-override', 'gt39.99|urn:iso:std:iso:4217|EUR')
+#         )
+#         response, status = await requester(
+#             'GET',
+#             '/db/guillotina/@fhir/Patient',
+#             params=data
+#         )
+#         assert status == 200
+

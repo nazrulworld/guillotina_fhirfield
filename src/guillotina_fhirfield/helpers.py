@@ -13,6 +13,8 @@ from typing import Union
 from urllib.parse import unquote_plus
 
 from guillotina.configure.config import reraise
+from multidict import MultiDict
+from multidict import MultiDictProxy
 from zope.interface import Invalid
 
 import ujson
@@ -22,7 +24,7 @@ from .variables import EMPTY_STRING
 from .variables import FHIR_ES_MAPPINGS_CACHE
 from .variables import FHIR_RESOURCE_LIST  # noqa: F401
 from .variables import FHIR_RESOURCE_MAPPING_DIR
-from .variables import FHIR_RESOURCE_MODEL_CACHE  # noqa: F401
+from .variables import FHIR_RESOURCE_CLASS_CACHE  # noqa: F401
 from .variables import FHIR_SEARCH_PARAMETER_SEARCHABLE
 from .variables import NO_VALUE
 
@@ -35,58 +37,70 @@ PATH_WITH_DOT_WHERE = re.compile(r"\.where\([a-z]+=\'[a-z]+\'\)$", re.I)
 NoneType = type(None)
 
 
-def search_fhir_model(model_name: str, cache: bool = True) -> Union[str, NoneType]:  # noqa: E999
-    """This function finds FHIR resource model class (from fhirclient.models) and return dotted path string.
+def search_fhir_resource_cls(
+    resource_type: str, cache: bool = True, fhir_release: str = None
+) -> Union[str, NoneType]:  # noqa: E999
+    """This function finds FHIR resource model class (from fhir.resources) and return dotted path string.
 
-    :arg model_name: the resource type name (required). i.e Organization
+    :arg resource_type: the resource type name (required). i.e Organization
     :arg cache: (default True) the flag which indicates should query fresh or serve from cache if available.
-    :return dotted full string path. i.e fhirclient.models.organization.Organization
+    :arg fhir_release: FHIR Release (version) name. i.e STU3, R4
+    :return dotted full string path. i.e fhir.resources.organization.Organization
 
     Example::
 
-        >>> from guillotina_fhirfield.helpers import search_fhir_model
+        >>> from guillotina_fhirfield.helpers import search_fhir_resource_cls
         >>> from zope.interface import Invalid
-        >>> dotted_path = search_fhir_model('Patient')
-        >>> 'fhirclient.models.patient.Patient' == dotted_path
+        >>> dotted_path = search_fhir_resource_cls('Patient')
+        >>> 'fhir.resources.patient.Patient' == dotted_path
         True
-        >>> dotted_path = search_fhir_model('FakeResource')
+        >>> dotted_path = search_fhir_resource_cls('FakeResource')
         >>> dotted_path is None
         True
     """
-    if model_name in FHIR_RESOURCE_MODEL_CACHE and cache:
-        return "{0}.{1}".format(FHIR_RESOURCE_MODEL_CACHE[model_name], model_name)
+    if resource_type in FHIR_RESOURCE_CLASS_CACHE and cache:
+        return "{0}.{1}".format(
+            FHIR_RESOURCE_CLASS_CACHE[resource_type],
+            resource_type,
+        )
 
     # Trying to get from entire modules
-    from fhirclient import models
+    prime_module = 'fhir.resources'
+    if fhir_release:
+        prime_module = f'{prime_module}.{fhir_release}'
+
+    prime_module_level = len(prime_module.split('.'))
+    prime_module = import_module(prime_module)
 
     for importer, module_name, ispkg in pkgutil.walk_packages(
-        models.__path__, models.__name__ + ".", onerror=lambda x: None
+        prime_module.__path__, prime_module.__name__ + ".", onerror=lambda x: None
     ):
-        if ispkg or module_name.endswith("_tests"):
+        if ispkg or (prime_module_level + 1) < len(module_name.split('.')):
             continue
 
         module_obj = import_module(module_name)
 
         for klass_name, klass in inspect.getmembers(module_obj, inspect.isclass):
 
-            if klass_name == model_name:
-                FHIR_RESOURCE_MODEL_CACHE[model_name] = module_name
-                return f"{module_name}.{model_name}"
+            if klass_name == resource_type:
+                FHIR_RESOURCE_CLASS_CACHE[resource_type] = module_name
+                return f"{module_name}.{resource_type}"
 
     return None
 
 
-def resource_type_to_model_cls(resource_type: str) -> Union[Invalid, type]:
+def resource_type_to_resource_cls(resource_type: str, fhir_release: str = None) -> Union[Invalid, type]:
     """ """
-    dotted_path = search_fhir_model(resource_type)
+    dotted_path = search_fhir_resource_cls(resource_type, fhir_release=fhir_release)
     if dotted_path is None:
-        raise Invalid("`{0}` is not valid fhir resource type!".format(resource_type))
+        raise Invalid(f"`{resource_type}` is not valid fhir resource type!")
 
     return import_string(dotted_path)
 
 
 def import_string(dotted_path: str) -> type:
     """Shameless hack from django utils, please don't mind!"""
+    module_path, class_name = None, None
     try:
         module_path, class_name = dotted_path.rsplit(".", 1)
     except (ValueError, AttributeError):
@@ -115,6 +129,8 @@ def import_string(dotted_path: str) -> type:
 
 def parse_json_str(str_val: str, encoding: str = "utf-8") -> Union[dict, NoneType]:
     """ """
+    json_dict: dict
+
     if str_val in (NO_VALUE, EMPTY_STRING, None):
         # No parsing for empty value
         return None
@@ -132,38 +148,12 @@ def parse_json_str(str_val: str, encoding: str = "utf-8") -> Union[dict, NoneTyp
     return json_dict
 
 
-def validate_index_name(name: str) -> Union[SearchQueryError, NoneType]:
-    """ZCatalog index name validation"""
-
-    parts = name.split("_")
-
-    try:
-        FHIR_RESOURCE_LIST[parts[0].lower()]
-    except KeyError:
-        msg = (
-            "Invalid index name for FhirFieldIndex. Index name must start with "
-            "any valid fhir resource type name as prefix or just use "
-            "resource type name as index name.\n"
-            "allowed format: (resource type as prefix)_(your name), "
-            "(resource_type as index name)\n"
-            "example: hospital_resource, patient"
-        )
-
-        t, v, tb = sys.exc_info()
-        try:
-            reraise(SearchQueryError(msg), None, tb)
-        finally:
-            del t, v, tb
-
-    return None
-
-
 def fhir_search_path_meta_info(path: str) -> Union[tuple, NoneType]:
     """ """
     resource_type = path.split(".")[0]
     properties = path.split(".")[1:]
 
-    model_cls = resource_type_to_model_cls(resource_type)
+    model_cls = resource_type_to_resource_cls(resource_type)
     result = None
     for prop in properties:
         for (
@@ -276,10 +266,7 @@ def parse_query_string(request, allow_none=False):
     param:allow_none
     """
     query_string = request.get("QUERY_STRING", "")
-
-    if not query_string:
-        return list()
-    params = list()
+    params = MultiDict()
 
     for q in query_string.split("&"):
         parts = q.split("=")
@@ -291,9 +278,9 @@ def parse_query_string(request, allow_none=False):
                 continue
             value = None
 
-        params.append((param_name, value))
+        params.add(param_name, value)
 
-    return params
+    return MultiDictProxy(params)
 
 
 def fhir_resource_mapping(resource_type: str, cache: bool = True) -> dict:
@@ -305,29 +292,31 @@ def fhir_resource_mapping(resource_type: str, cache: bool = True) -> dict:
     try:
         FHIR_RESOURCE_LIST[resource_type.lower()]
     except KeyError:
-        msg = f'{resource_type} is not valid FHIR resource type'
+        msg = f"{resource_type} is not valid FHIR resource type"
 
         t, v, tb = sys.exc_info()
         try:
             reraise(Invalid(msg), None, tb)
         finally:
             del t, v, tb
-    mapping_json = FHIR_RESOURCE_MAPPING_DIR / f'{resource_type}.mapping.json'
+    mapping_json = FHIR_RESOURCE_MAPPING_DIR / f"{resource_type}.mapping.json"
 
     if not mapping_json.exists():
 
         warnings.warn(
-            f'Mapping for {resource_type} is currently not supported,'
-            ' default Resource\'s mapping is used instead!', UserWarning)
+            f"Mapping for {resource_type} is currently not supported,"
+            " default Resource's mapping is used instead!",
+            UserWarning,
+        )
 
-        return fhir_resource_mapping('Resource', cache=True)
+        return fhir_resource_mapping("Resource", cache=True)
 
-    with io.open(str(mapping_json), 'r', encoding='utf8') as f:
+    with io.open(str(mapping_json), "r", encoding="utf8") as f:
 
         mapping_dict = ujson.load(f)
         # xxx: validate mapping_dict['meta']['profile']?
 
-        FHIR_ES_MAPPINGS_CACHE[resource_type] = mapping_dict['mapping']
+        FHIR_ES_MAPPINGS_CACHE[resource_type] = mapping_dict["mapping"]
 
     return FHIR_ES_MAPPINGS_CACHE[resource_type]
 
