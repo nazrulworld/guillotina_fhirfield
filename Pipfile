@@ -18,7 +18,7 @@ sphinxcontrib-apidoc = "*"
 tox = "*"
 certifi = "*"
 zest-releaser = {extras = ["recommended"],version = "*"}
-fhirclient = "*"
+fhir-resources = {version = "==3.0.1"}
 guillotina-elasticsearch = "*"
 
 [requires]

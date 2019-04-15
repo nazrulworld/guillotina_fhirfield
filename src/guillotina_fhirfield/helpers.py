@@ -179,7 +179,7 @@ def filter_logic_in_path(raw_path: str) -> str:
     """Separates if any logic_in_path is provided"""
 
     # replace with unique
-    replacer = "XXXXXXX"
+    replacer = "XOOXXOOXXOOX"
     as_match = PATH_WITH_DOT_AS.search(raw_path)
     is_match = PATH_WITH_DOT_IS.search(raw_path)
     where_match = PATH_WITH_DOT_IS.search(raw_path)

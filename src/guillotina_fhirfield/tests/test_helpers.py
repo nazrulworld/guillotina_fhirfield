@@ -92,4 +92,7 @@ async def test_elasticsearch_query_builder(es_requester):
             '/db/guillotina/@fhir/Organization',
             params=data
         )
+        import pdb;
+        pdb.set_trace()
         assert status == 200
+

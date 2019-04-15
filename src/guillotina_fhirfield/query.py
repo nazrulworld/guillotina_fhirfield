@@ -23,8 +23,15 @@ from guillotina_fhirfield.variables import SEARCH_PARAM_MODIFIERS
 from dateutil.parser import parse as dt_parse
 
 from . import mapping_types
+import copy
 import ast
 import re
+
+escape_comma_replacer = "_ESCAPE_COMMA_"
+
+
+def has_escape_comma(val):
+    return "\\," in val
 
 
 class ElasticSearchQueryBuilder:
@@ -82,237 +89,300 @@ class ElasticSearchQueryBuilder:
         return field_name
 
     def _make_address_query(
-            self,
-            path,
-            value,
-            logic_in_path=None,
-            nested=None,
-            modifier=None):
+        self, path, value, logic_in_path=None, nested=None, modifier=None
+    ):
         """ """
-        multiple_paths = len(path.split('.')) == 2
+        query_context = "filter"
+        multiple_paths = len(path.split(".")) == 2
         nested_path = path
 
         if multiple_paths:
-            match_key = 'should'
+            query_context = "should"
 
         else:
-            nested_path = '.'.join(path.split('.')[:-1])
-            match_key = 'must'
+            nested_path = ".".join(path.split(".")[:-1])
+            query_context = "filter"
 
         matches = list()
         if multiple_paths:
-            matches.append({
-                    'match': {path + '.city': value},
-            })
-            matches.append({
-                    'match': {path + '.country': value},
-            })
-            matches.append({
-                    'match': {path + '.postalCode': value},
-            })
-            matches.append({
-                    'match': {path + '.state': value},
-            })
+            matches.append({"term": {path + ".city": value}})
+            matches.append({"term": {path + ".country": value}})
+            matches.append({"term": {path + ".postalCode": value}})
+            matches.append({"term": {path + ".state": value}})
         else:
-            matches.append({
-                    'match': {path: value},
-            })
+            matches.append({"term": {path: value}})
 
         if nested:
             query = {
-                'nested': {
-                    'path': nested_path,
-                    'query': {'bool': {match_key: matches}},
-                },
+                "nested": {
+                    "path": nested_path,
+                    "query": {"bool": {query_context: matches}},
+                }
             }
+            if query_context == "should":
+                query["nested"]["query"]["bool"]["minimum_should_match"] = 1
         else:
-            query = {
-                'query': {'bool': {match_key: matches}},
-            }
+            query = {"bool": {query_context: matches}}
+            if query_context == "should":
+                query["bool"]["minimum_should_match"] = 1
+        # we dependent on modifier
+        return modifier == "not" and "must_not" or "filter", query
 
-        return query
+    def make_codeableconcept_query(
+        self, path, value, nested=None, modifier=None, logic_in_path=None
+    ):
+        """ """
+        if modifier == "not":
+            occurrence_type = "must_not"
+
+        elif modifier == "text":
+            occurrence_type = "filter"
+
+        elif modifier in ("above", "below"):
+            # xxx: not implemnted yet
+            occurrence_type = "filter"
+
+        else:
+            occurrence_type = "filter"
+
+        queries = list()
+        has_escape_comma_ = has_escape_comma(value)
+
+        if has_escape_comma_:
+            value = value.replace("\\,", escape_comma_replacer)
+
+        for val in value.split(","):
+            if has_escape_comma_ and has_escape_comma(val):
+                val = val.replace(escape_comma_replacer, "\\,")
+
+            query = self._make_codeableconcept_query(
+                path,
+                val.strip(),
+                nested=nested,
+                modifier=modifier,
+                logic_in_path=logic_in_path,
+            )
+            queries.append(query)
+
+        if len(queries) == 1:
+            return occurrence_type, queries[0]
+
+        if nested:
+            combined = {
+                "nested": {
+                    "path": path,
+                    "query": {"bool": {"minimum_should_match": 1, "should": list()}},
+                }
+            }
+            should_path = combined["nested"]["query"]["bool"]["should"]
+
+        else:
+            combined = {"bool": {"minimum_should_match": 1, "should": list()}}
+            should_path = combined["bool"]["should"]
+
+        for query in queries:
+            if "nested" in query:
+                query_ = query["nested"]["query"]["bool"]["filter"]
+            else:
+                query_ = query["bool"]["filter"]
+            if len(query_) == 1:
+                should_path.append(query_[0])
+            elif len(query_) > 1:
+                should_path.append({"bool": {"filter": query_}})
+
+        return occurrence_type, combined
 
     def _make_codeableconcept_query(
-            self,
-            path,
-            value,
-            nested=None,
-            modifier=None,
-            logic_in_path=None):
+        self, path, value, nested=None, modifier=None, logic_in_path=None
+    ):
         """ """
-        if modifier == 'not':
-            match_key = 'must_not'
-
-        elif modifier == 'text':
-            match_key = 'must'
-
-        elif modifier in ('above', 'below'):
-            # xxx: not implemnted yet
-            match_key = 'must'
-
-        else:
-            match_key = 'must'
-
         matches = list()
 
-        if modifier == 'text':
+        if modifier == "text":
             # make CodeableConcept.text query
-            matches.append({
-                'match': {path + '.text': value},
-                })
+            matches.append({"match": {path + ".text": value}})
         else:
             coding_query = self._make_coding_query(
-                path + '.coding',
-                value,
-                nested=True,
-                logic_in_path=logic_in_path)
+                path + ".coding", value, nested=True, logic_in_path=logic_in_path
+            )
 
             matches.append(coding_query)
 
         if nested:
-            query = {
-                'nested': {
-                    'path': path,
-                    'query': {'bool': {match_key: matches}},
-                },
-            }
+            query = {"nested": {"path": path, "query": {"bool": {"filter": matches}}}}
         else:
-            query = {
-                'query': {'bool': {match_key: matches}},
-            }
+            query = {"bool": {"filter": matches}}
         return query
 
-    def _make_coding_query(self,
-                           path,
-                           value,
-                           nested=None,
-                           modifier=None,
-                           logic_in_path=None):
-        """ """
-        if modifier == 'not':
-            match_key = 'must_not'
-        elif modifier == 'text':
-            match_key = 'must'
-        elif modifier in ('above', 'below'):
-            # xxx: not implemnted yet
-            match_key = 'must'
+    def make_coding_query(
+        self, path, value, nested=None, modifier=None, logic_in_path=None
+    ):
+        queries = list()
+        has_escape_comma_ = has_escape_comma(value)
+
+        if has_escape_comma_:
+            value = value.replace("\\,", escape_comma_replacer)
+
+        for val in value.split(","):
+            if has_escape_comma_ and has_escape_comma(val):
+                val = val.replace(escape_comma_replacer, "\\,")
+
+            query = self._make_coding_query(
+                path,
+                val.strip(),
+                nested=nested,
+                modifier=modifier,
+                logic_in_path=logic_in_path,
+            )
+            queries.append(query)
+
+        if len(queries) == 1:
+            # occurrence_type always filter
+            return "filter", queries[0]
+
+        if nested:
+            combined = {
+                "nested": {
+                    "path": path,
+                    "query": {"bool": {"minimum_should_match": 1, "should": list()}},
+                }
+            }
+            should_path = combined["nested"]["query"]["bool"]["should"]
+
         else:
-            match_key = 'must'
+            combined = {"bool": {"minimum_should_match": 1, "should": list()}}
+            should_path = combined["bool"]["should"]
+
+        for query in queries:
+            if "nested" in query:
+                query_bool = query["nested"]["query"]["bool"]
+            else:
+                query_bool = query["bool"]
+
+            should_path.append({"bool": query_bool})
+
+        return "filter", combined
+
+    def _make_coding_query(
+        self, path, value, nested=None, modifier=None, logic_in_path=None
+    ):
+        """ """
+        if modifier == "not":
+            match_key = "must_not"
+        elif modifier == "text":
+            match_key = "filter"
+        elif modifier in ("above", "below"):
+            # xxx: not implemnted yet
+            match_key = "filter"
+        else:
+            match_key = "filter"
 
         matches = list()
-        has_pipe = '|' in value
+        has_pipe = "|" in value
 
-        if modifier == 'text':
+        if modifier == "text":
 
-            matches.append({
-                'match': {path + '.display': value},
-                })
+            matches.append({"term": {path + ".display": value}})
 
         elif has_pipe:
 
-            if value.startswith('|'):
-                matches.append({
-                    'match': {path + '.code': value[1:]},
-                })
-            elif value.endswith('|'):
-                matches.append({
-                    'match': {path + '.system': value[:-1]},
-                })
+            if value.startswith("|"):
+                matches.append({"term": {path + ".code": value[1:]}})
+            elif value.endswith("|"):
+                matches.append({"term": {path + ".system": value[:-1]}})
             else:
-                parts = value.split('|')
+                parts = value.split("|")
                 try:
-                    matches.append({
-                        'match': {path + '.system': parts[0]},
-                    })
+                    matches.append({"term": {path + ".system": parts[0]}})
 
-                    matches.append({
-                        'match': {path + '.code': parts[1]},
-                    })
+                    matches.append({"term": {path + ".code": parts[1]}})
 
                 except IndexError:
                     pass
 
         else:
-            matches.append({
-                'match': {path + '.code': value},
-                })
+            matches.append({"term": {path + ".code": value}})
 
         if nested:
-            query = {
-                'nested': {
-                    'path': path,
-                    'query': {'bool': {match_key: matches}},
-                },
-            }
+            query = {"nested": {"path": path, "query": {"bool": {match_key: matches}}}}
         else:
-            query = {
-                'query': {'bool': {match_key: matches}},
-            }
+            query = {"bool": {match_key: matches}}
 
         return query
 
     def _make_contactpoint_query(
-            self,
-            path,
-            value,
-            logic_in_path=None,
-            nested=None,
-            modifier=None):
+        self, path, value, logic_in_path=None, nested=None, modifier=None
+    ):
         """ """
-        if modifier == 'not':
-            match_key = 'must_not'
+        occurrence_type = "filter"
 
-        elif modifier == 'text':
-            match_key = 'must'
+        if modifier == "not":
+            occurrence_type = "must_not"
 
-        elif modifier in ('above', 'below'):
+        elif modifier == "text":
+            occurrence_type = "filter"
+
+        elif modifier in ("above", "below"):
             # xxx: not implemnted yet
-            match_key = 'must'
-
-        else:
-            match_key = 'must'
+            occurrence_type = "filter"
 
         matches = list()
-        matches.append({
-                'match': {path + '.value': value},
-        })
+        matches.append({"match": {path + ".value": value}})
 
         if logic_in_path:
-            parts = logic_in_path.split('|')
-            matches.append({
-                    'match': {path + '.' + parts[1]: parts[2]},
-            })
+            parts = logic_in_path.split("|")
+            matches.append({"term": {path + "." + parts[1]: parts[2]}})
 
         if nested:
-            query = {
-                'nested': {
-                    'path': path,
-                    'query': {'bool': {match_key: matches}},
-                },
-            }
+            query = {"nested": {"path": path, "query": {"bool": {"filter": matches}}}}
         else:
-            query = {
-                'query': {'bool': {match_key: matches}},
-            }
+            query = {"bool": {"filter": matches}}
 
-        return query
+        return occurrence_type, query
 
-    def _make_date_query(
-           self,
-           path,
-           value,
-           modifier=None):
+    def make_date_query(self, path, value, modifier=None):
         """ """
-        prefix = 'eq'
+        queries = list()
+        has_escape_comma_ = has_escape_comma(value)
+        if has_escape_comma_:
+            value = value.replace("\\,", escape_comma_replacer)
+
+        for val in value.split(","):
+            if has_escape_comma_ and has_escape_comma(val):
+                val = val.replace(escape_comma_replacer, "\\,")
+
+            occurance_type, query = self._make_date_query(
+                path, val.strip(), modifier=modifier
+            )
+            queries.append((occurance_type, query))
+
+        if len(queries) == 1:
+            return queries[0]
+        elif len(queries) > 1:
+            same_occurance = len(set(map(lambda x: x[0], queries))) == 1
+            combined = {"bool": {"should": list(), "minimum_should_match": 1}}
+            for occurance_type, query in queries:
+                if same_occurance or occurance_type in ("filter", "must"):
+                    combined["bool"]["should"].append(query)
+                else:
+                    query_ = {"bool": {"must_not": query}}
+                    combined["bool"]["should"].append(query_)
+            # allways filter
+            return "filter", combined
+
+    def _make_date_query(self, path, value, modifier=None):
+        """ """
+        occurance_type = "filter"
+        prefix = "eq"
 
         if value[0:2] in FSPR_VALUE_PRIFIXES_MAP:
             prefix = value[0:2]
             value = value[2:]
         _iso8601 = dt_parse(value).isoformat()
 
-        if '+' in _iso8601:
-            parts = _iso8601.split('+')
-            timezone = '+{0!s}'.format(parts[1])
+        if "+" in _iso8601:
+            parts = _iso8601.split("+")
+            timezone = "+{0!s}".format(parts[1])
             value = parts[0]
         else:
             timezone = None
@@ -320,241 +390,225 @@ class ElasticSearchQueryBuilder:
 
         query = dict()
 
-        if prefix in ('eq', 'ne'):
-            query['range'] = {
+        if prefix in ("eq", "ne"):
+            query["range"] = {
                 path: {
-                    FSPR_VALUE_PRIFIXES_MAP.get('ge'): value,
-                    FSPR_VALUE_PRIFIXES_MAP.get('le'): value,
-                },
+                    FSPR_VALUE_PRIFIXES_MAP.get("ge"): value,
+                    FSPR_VALUE_PRIFIXES_MAP.get("le"): value,
+                }
             }
 
-        elif prefix in ('le', 'lt', 'ge', 'gt'):
-            query['range'] = {
-                path: {
-                    FSPR_VALUE_PRIFIXES_MAP.get(prefix): value,
-                },
-            }
+        elif prefix in ("le", "lt", "ge", "gt"):
+            query["range"] = {path: {FSPR_VALUE_PRIFIXES_MAP.get(prefix): value}}
 
         if timezone:
-            query['range'][path]['time_zone'] = timezone
+            query["range"][path]["time_zone"] = timezone
 
-        if (prefix != 'ne' and modifier == 'not') or \
-                (prefix == 'ne' and modifier != 'not'):
-            query = {'query': {'not': query}}
+        if (prefix != "ne" and modifier == "not") or (
+            prefix == "ne" and modifier != "not"
+        ):
+            occurance_type = "must_not"
 
-        return query
+        return occurance_type, query
 
-    def _make_exists_query(
-           self,
-           path,
-           value,
-           nested,
-           modifier=None):
+    def _make_exists_query(self, path, value, nested, modifier=None):
         """ """
         query = dict()
-        exists_q = {
-            'exists': {'field': path},
-        }
+        occurrence_type = "filter"
+        exists_q = {"exists": {"field": path}}
 
-        if (modifier == 'missing' and value == 'true') or \
-                (modifier == 'exists' and value == 'false'):
-            query['bool'] = \
-                {
-                    'must_not': exists_q,
-                }
-        elif (modifier == 'missing' and value == 'false') or \
-                (modifier == 'exists' and value == 'true'):
-
-            query['exists'] = {'field': path}
+        if (modifier == "missing" and value == "true") or (
+            modifier == "exists" and value == "false"
+        ):
+            occurrence_type = "must_not"
 
         if nested:
-            nested_query = {
-                    'nested': {
-                        'path': path,
-                        'query': exists_q,
-                    },
-                }
+            query = {"nested": {"path": path, "query": exists_q}}
+        else:
+            query = exists_q
 
-            if 'bool' in query:
-                query['bool']['must_not'] = nested_query
-            else:
-                query = {
-                    'bool': {
-                        'must': nested_query,
-                    },
-                }
+        return occurrence_type, query
 
-        return {'query': query}
-
-    def _make_humanname_query(
-            self,
-            path,
-            value,
-            nested=None,
-            modifier=None):
+    def _make_humanname_query(self, path, value, nested=None, modifier=None):
         """ """
-        fullpath = path + '.text'
-        if len(path.split('.')) == 2:
-            fullpath = path + '.text'
+        fullpath = path + ".text"
+        if len(path.split(".")) == 2:
+            fullpath = path + ".text"
         else:
             fullpath = path
-            path = '.'.join(path.split('.')[:-1])
+            path = ".".join(path.split(".")[:-1])
 
-        if fullpath.split('.')[-1] == 'given':
+        if fullpath.split(".")[-1] == "given":
             array_ = True
         else:
             array_ = False
 
-        if fullpath.split('.')[-1] == 'text':
-            query = self._make_match_query(fullpath, value, modifier)
+        if fullpath.split(".")[-1] == "text":
+            occurrence_type, query = self._make_match_query(fullpath, value, modifier)
 
         else:
 
-            query = self._make_token_query(
-                fullpath,
-                value,
-                array_=array_,
-                modifier=modifier)
+            occurrence_type, query = self._make_token_query(
+                fullpath, value, array_=array_, modifier=modifier
+            )
 
         if nested:
-            query = {
-                'nested': {
-                    'path': path,
-                    'query': query,
-                },
-            }
-        return query
+            query = {"nested": {"path": path, "query": query}}
+        return occurrence_type, query
 
-    def _make_identifier_query(
-           self,
-           path,
-           value,
-           nested=None,
-           modifier=None):
+    def _make_identifier_query(self, path, value, nested=None, modifier=None):
         """ """
         matches = list()
-        has_pipe = '|' in value
+        has_pipe = "|" in value
 
-        if modifier == 'not':
-            match_key = 'must_not'
+        if modifier == "not":
+            occurrence_type = "must_not"
         else:
-            match_key = 'must'
+            occurrence_type = "filter"
 
-        if modifier == 'text':
-            # make identifier.type.text query
-            matches.append({
-                'match': {path + '.type.text': value},
-                })
+        if modifier == "text":
+            # make dentifier.type.text query
+            matches.append({"match": {path + ".type.text": value}})
 
         elif has_pipe:
-            if value.startswith('|'):
-                matches.append({
-                    'match': {path + '.value': value[1:]},
-                })
-            elif value.endswith('|'):
-                matches.append({
-                    'match': {path + '.system': value[:-1]},
-                })
+            if value.startswith("|"):
+                matches.append({"term": {path + ".value": value[1:]}})
+            elif value.endswith("|"):
+                matches.append({"term": {path + ".system": value[:-1]}})
             else:
-                parts = value.split('|')
+                parts = value.split("|")
                 try:
-                    matches.append({
-                        'match': {path + '.system': parts[0]},
-                    })
+                    matches.append({"term": {path + ".system": parts[0]}})
 
-                    matches.append({
-                        'match': {path + '.value': parts[1]},
-                    })
+                    matches.append({"term": {path + ".value": parts[1]}})
 
                 except IndexError:
                     pass
         else:
-            matches.append({
-                'match': {path + '.value': value},
-                })
+            matches.append({"term": {path + ".value": value}})
 
         if nested:
-            query = {
-                'nested': {
-                    'path': path,
-                    'query': {'bool': {match_key: matches}},
-                },
-            }
+            query = {"nested": {"path": path, "query": {"bool": {"filter": matches}}}}
         else:
-            query = {
-                'query': {'bool': {match_key: matches}},
-            }
+            if len(matches) == 1:
+                query = matches[0]
+            else:
+                query = {"bool": {"filter": matches}}
 
-        return query
+        return occurrence_type, query
 
     def _make_match_query(self, path, value, modifier=None):
         """ """
 
-        if modifier == 'not':
-            match_key = 'must_not'
+        if modifier == "not":
+            occurrence_type = "must_not"
         else:
-            match_key = 'must'
+            occurrence_type = "filter"
 
-        query = {'match': {path: value}}
+        query = {"match": {path: value}}
 
-        return {'query': {'bool': {match_key: [query]}}}
+        return occurrence_type, query
 
-    def _make_number_query(
-            self,
-            path,
-            value,
-            prefix='eq',
-            modifier=None):
+    def make_number_query(self, path, value, modifier=None):
         """ """
+        queries = list()
+        mapped_definition = self.get_mapped_definition(path)
+        for val in value.split(","):
+            occurrence_type, query = self._make_number_query(
+                path,
+                val.strip(),
+                mapped_definition=mapped_definition,
+                modifier=modifier,
+            )
+            queries.append((occurrence_type, query))
+
+        if len(queries) == 1:
+            return queries[0]
+
+        elif len(queries) > 1:
+            combined = {"bool": {"should": list(), "minimum_should_match": 1}}
+            for occurrence_type, query in queries:
+                if occurrence_type == "must_not":
+                    combined["bool"]["should"].append({"bool": {"must_not": query}})
+                else:
+                    combined["bool"]["should"].append(query)
+            # allways filter
+            return "filter", combined
+
+    def _make_number_query(self, path, value, mapped_definition, modifier=None):
+        """ """
+        occurrence_type = "filter"
+        prefix, val = self.parse_prefix(value)
+        path_ = path
+        if "properties" in mapped_definition:
+            if "value" in mapped_definition["properties"]:
+                path_ = path + ".value"
+                type_ = mapped_definition["properties"]["value"]["type"]
+        else:
+            type_ = mapped_definition["type"]
+
+        if type_ == "float":
+            val = float(val)
+        else:
+            val = int(val)
+
         query = dict()
-        if prefix in ('eq', 'ne'):
-            query['range'] = {
-                path: {
-                    FSPR_VALUE_PRIFIXES_MAP.get('ge'): value,
-                    FSPR_VALUE_PRIFIXES_MAP.get('le'): value,
-                },
+        if prefix in ("eq", "ne"):
+            query["range"] = {
+                path_: {
+                    FSPR_VALUE_PRIFIXES_MAP.get("ge"): val,
+                    FSPR_VALUE_PRIFIXES_MAP.get("le"): val,
+                }
             }
 
-        elif prefix in ('le', 'lt', 'ge', 'gt'):
-            query['range'] = {
-                path: {
-                    FSPR_VALUE_PRIFIXES_MAP.get(prefix): value,
-                },
-            }
+        elif prefix in ("le", "lt", "ge", "gt"):
+            query["range"] = {path_: {FSPR_VALUE_PRIFIXES_MAP.get(prefix): val}}
 
-        if (prefix != 'ne' and modifier == 'not') or \
-                (prefix == 'ne' and modifier != 'not'):
-            query = {'query': {'not': query}}
+        if (prefix != "ne" and modifier == "not") or (
+            prefix == "ne" and modifier != "not"
+        ):
+            occurrence_type = "must_not"
 
-        return query
+        return occurrence_type, query
 
-    def _make_quantity_query(
-            self,
-            path,
-            value,
-            prefix='eq',
-            modifier=None):
+    def make_quantity_query(self, path, value, modifier=None):
+        """ """
+        queries = list()
+        has_escape_comma_ = has_escape_comma(value)
+        if has_escape_comma_:
+            value = value.replace("\\,", escape_comma_replacer)
+
+        for val in value.split(","):
+            if has_escape_comma_ and has_escape_comma(val):
+                val = val.replace(escape_comma_replacer, "\\,")
+
+            query = self._make_quantity_query(path, val.strip(), modifier=modifier)
+            queries.append(query)
+
+        if len(queries) == 1:
+            # always filter
+            return "filter", queries[0]
+        elif len(queries) > 1:
+            combined = {"bool": {"should": list(), "minimum_should_match": 1}}
+            for query in queries:
+                combined["bool"]["should"].append(query)
+            # always filter
+            return "filter", combined
+
+    def _make_quantity_query(self, path, value, modifier=None):
         """ """
         matches = list()
-        value_parts = value.split('|')
-        value = float(value_parts[0])
-
-        value_query = dict()
-
-        if prefix in ('eq', 'ne'):
-            value_query['range'] = {
-                path + '.value': {
-                    FSPR_VALUE_PRIFIXES_MAP.get('ge'): value,
-                    FSPR_VALUE_PRIFIXES_MAP.get('le'): value,
-                },
-            }
-
-        elif prefix in ('le', 'lt', 'ge', 'gt'):
-            value_query['range'] = {
-                path + '.value': {
-                    FSPR_VALUE_PRIFIXES_MAP.get(prefix): value,
-                },
-            }
+        value_parts = value.split("|")
+        mapped_definition = self.get_mapped_definition(path)
+        query = {"bool": {}}
+        if value_parts[0]:
+            occurrence_type, value_query = self._make_number_query(
+                path,
+                value_parts[0],
+                mapped_definition=mapped_definition,
+                modifier=modifier,
+            )
+            query["bool"] = {occurrence_type: [value_query]}
         # Potential extras
         system = None
         code = None
@@ -567,119 +621,127 @@ class ElasticSearchQueryBuilder:
             unit = value_parts[1]
 
         if system:
-            matches.append({
-                    'match': {path + '.system': system},
-                })
+            matches.append({"term": {path + ".system": system}})
         if code:
-            matches.append({
-                    'match': {path + '.code': code},
-                })
+            matches.append({"term": {path + ".code": code}})
         if unit:
-            matches.append({
-                    'match': {path + '.unit': unit},
-                })
-
-        if (prefix != 'ne' and modifier == 'not') or \
-                (prefix == 'ne' and modifier != 'not'):
-            query = {
-                'query': {'bool': {'must_not': [value_query]}},
-            }
-        else:
-            query = {
-                'query': {'bool': {'must': [value_query]}},
-            }
+            matches.append({"term": {path + ".unit": unit}})
 
         if matches:
-            if 'must' not in query['query']['bool']:
-                query['query']['bool'].update({'must': list()})
+            if modifier == "not":
+                if "must_not" in query["bool"]:
+                    query["bool"] = {"must_not": list()}
+                query["bool"]["must_not"].extend(matches)
 
-            query['query']['bool']['must'].extend(matches)
+            else:
+                if "filter" not in query["bool"]:
+                    query["bool"].update({"filter": list()})
+
+                query["bool"]["filter"].extend(matches)
 
         return query
 
-    def _make_reference_query(
-           self,
-           path,
-           value,
-           nested=None,
-           modifier=None):
+    def make_reference_query(self, path, value, nested=None, modifier=None):
         """ """
-        query = dict(bool=dict())
+        occurrence_type = "filter"
+        queries = list()
+        has_escape_comma_ = has_escape_comma(value)
 
-        fullpath = path + '.reference'
+        if has_escape_comma_:
+            value = value.replace("\\,", escape_comma_replacer)
 
-        matches = [dict(term={fullpath: value})]
+        for val in value.split(","):
+            if has_escape_comma_ and has_escape_comma(val):
+                val = val.replace(escape_comma_replacer, "\\,")
 
-        if modifier == 'not':
-            match_key = 'must_not'
-        else:
-            match_key = 'must'
+            query = self._make_reference_query(path, val.strip(), nested=nested)
+            queries.append(query)
 
-        query['bool'][match_key] = matches
+        if modifier == "not":
+            occurrence_type = "must_not"
+
+        if len(queries) == 1:
+            return occurrence_type, queries[0]
+        elif len(queries) > 1:
+            if nested:
+                combined = {
+                    "nested": {
+                        "path": path,
+                        "query": {
+                            "bool": {"minimum_should_match": 1, "should": list()}
+                        },
+                    }
+                }
+                should_path = combined["nested"]["query"]["bool"]["should"]
+
+            else:
+                combined = {"bool": {"minimum_should_match": 1, "should": list()}}
+                should_path = combined["bool"]["should"]
+
+            for query in queries:
+                if "nested" in query:
+                    query = query["nested"]["query"]["bool"]["filter"]
+
+                should_path.append(query)
+
+            return occurrence_type, combined
+
+    def _make_reference_query(self, path, value, nested=None):
+        """ """
+        fullpath = path + ".reference"
+
+        query = dict(match={fullpath: value})
 
         if nested:
-            query = {
-                'nested': {
-                    'path': path,
-                    'query': query,
-                },
-            }
-        else:
-            query = {'query': query}
+            query = {"nested": {"path": path, "query": {"bool": {"filter": query}}}}
 
         return query
 
-    def _make_term_query(
-            self,
-            path,
-            value,
-            array_=None):
+    def _make_term_query(self, path, value, array_=None):
         """ """
+        # check array type or multiple terms is provided
+        use_terms = array_ or type(value) in (list, tuple, set)
 
-        if array_:
-            # check Array type
-            query = {
-                'query': {
-                    'terms': {
-                        path: [value],
-                    },
-                },
-            }
+        if use_terms:
+            if type(value) not in (list, tuple, set):
+                terms = [value]
+            else:
+                terms = value
+            query = {"terms": {path: terms}}
         else:
-            query = {
-                'query': {
-                    'term': {
-                        path: value,
-                    },
-                },
-            }
+            query = {"term": {path: value}}
 
         return query
 
-    def _make_token_query(
-           self,
-           path,
-           value,
-           array_=None,
-           modifier=None):
+    def _make_token_query(self, path, value, array_=None, modifier=None):
         """ """
-        if value in ('true', 'false'):
-            if value == 'true':
-                    value = True
+        occurrence_type = "filter"
+        has_escape_comma_ = has_escape_comma(value)
+        if has_escape_comma_:
+            value = value.replace("\\,", escape_comma_replacer)
+
+        if value in ("true", "false"):
+            if value == "true":
+                value = True
             else:
                 value = False
+        elif isinstance(value, (str, bytes)) and "," in value:
+            container = list()
+            for val in value.split(","):
+                if has_escape_comma_ and has_escape_comma(val):
+                    val = val.replace(escape_comma_replacer, "\\,")
+                container.append(val.strip())
+            value = container
 
-        if modifier == 'not':
-            match_key = 'must_not'
+        if modifier == "not":
+            occurrence_type = "must_not"
         else:
-            match_key = 'must'
+            occurrence_type = "filter"
 
         term_query = self._make_term_query(path, value, array_)
 
-        query = {
-                'query': {'bool': {match_key: [term_query]}},
-        }
-        return query
+        query = [term_query]
+        return occurrence_type, query
 
 #       =>     Private methods ended        <=
 
@@ -694,7 +756,7 @@ class ElasticSearchQueryBuilder:
             """ """
             query = None
 
-            parts = param_name.split(':')
+            parts = param_name.split(":")
             try:
                 param_name = parts[0]
                 modifier = parts[1]
@@ -702,352 +764,315 @@ class ElasticSearchQueryBuilder:
                 modifier = None
 
             query_meta = self.resolve_query_meta(param_name)
-            query = self._build_query(
-                param_name,
-                value,
-                modifier,
-                query_meta=query_meta)
+            occurrence_type, query = self._build_query(
+                param_name, value, modifier, query_meta=query_meta
+            )
 
             # add generated field query in list
-            assert query, 'Query `{0}` must not be empty!'.format(query)
-            if query:
-                # xxx: OR query?
-                self.query_tree['query']['bool']['must'].append(query)
+            assert query, "Query `{0}` must not be empty!".format(query)
+            if isinstance(query, (tuple, list)):
+                self.query_tree["bool"][occurrence_type].extend(query)
+            else:
+                self.query_tree["bool"][occurrence_type].append(query)
 
         # unofficial but tricky!
         query = self._make_term_query(
-            self.field_name + '.resourceType',
-            self.resource_type)
+            self.field_name + ".resourceType", self.resource_type
+        )
 
         # XXX multiple resources?
-        self.query_tree['query']['bool']['must'].append(query)
+        self.query_tree["bool"]["filter"].append(query)
 
-        return self.query_tree.copy()
+        query_tree = copy.deepcopy(self.query_tree)
+        for ot in self.query_tree["bool"]:
+            if len(query_tree["bool"][ot]) == 0:
+                del query_tree["bool"][ot]
+
+        return query_tree
 
     def _build_query(self, param_name, value, modifier, query_meta):
         """ """
-        path, raw_path, param_type, logic_in_path, map_cls = \
-            query_meta
+        path, raw_path, param_type, logic_in_path, map_cls = query_meta
 
-        if modifier in ('missing', 'exists'):
+        if modifier in ("missing", "exists"):
 
             nested = self.is_nested_mapping(path=path)
 
-            query = self._make_exists_query(
-                path=path,
-                value=value,
-                nested=nested,
-                modifier=modifier)
+            occurrence_type, query = self._make_exists_query(
+                path=path, value=value, nested=nested, modifier=modifier
+            )
 
-        elif param_type == 'date':
-            query = self._make_date_query(
-                path,
-                value,
-                modifier)
+        elif param_type == "date":
+            occurrence_type, query = self.make_date_query(path, value, modifier)
 
-        elif param_type == 'reference':
+        elif param_type == "reference":
 
             nested = self.is_nested_mapping(path)
 
-            query = self._make_reference_query(
-                    path,
-                    value,
-                    nested=nested,
-                    modifier=modifier)
+            occurrence_type, query = self.make_reference_query(
+                path, value, nested=nested, modifier=modifier
+            )
 
-        elif param_type == 'uri':
+        elif param_type == "uri":
 
-            meta_info = \
-                fhir_search_path_meta_info(raw_path)
+            meta_info = fhir_search_path_meta_info(raw_path)
             array_ = meta_info[1] is True
 
-            query = self._make_token_query(
-                path,
-                value,
-                array_=array_,
-                modifier=modifier)
+            occurrence_type, query = self._make_token_query(
+                path, value, array_=array_, modifier=modifier
+            )
 
-        elif param_type == 'string':
+        elif param_type == "string":
             # For now we are using literal string search
             # in future there could be searchable text like
             # search
-            query = self.build_string_query(
+            occurrence_type, query = self.build_string_query(
                 value,
                 path,
                 raw_path,
                 logic_in_path=logic_in_path,
                 map_cls=map_cls,
-                modifier=modifier)
+                modifier=modifier,
+            )
 
-        elif param_type == 'quantity':
+        elif param_type == "quantity":
 
-            prefix, value = self.parse_prefix(value)
+            occurrence_type, query = self.make_quantity_query(
+                path, value, modifier=modifier
+            )
 
-            query = self._make_quantity_query(
-                path,
-                value,
-                prefix=prefix,
-                modifier=modifier)
+        elif param_type == "number":
+            occurrence_type, query = self.make_number_query(
+                path, value, modifier=modifier
+            )
 
-        elif param_type == 'number':
-
-            prefix, value = self.parse_prefix(value)
-            mapped_definition = self.get_mapped_definition(path)
-
-            if 'type' in mapped_definition:
-                if mapped_definition['type'] == 'float':
-                    value = float(value)
-                else:
-                    value = int(value)
-
-            elif 'properties' in mapped_definition:
-                if 'value' in mapped_definition['properties']:
-                    path += '.value'
-
-            query = self._make_number_query(
-                path,
-                value,
-                prefix=prefix,
-                modifier=modifier)
-
-        elif param_type == 'token':
+        elif param_type == "token":
             # One of most complex param type
-
-            query = self.build_token_query(
+            occurrence_type, query = self.build_token_query(
                 value,
                 path,
                 raw_path,
                 logic_in_path=logic_in_path,
                 map_cls=map_cls,
-                modifier=modifier)
+                modifier=modifier,
+            )
 
-        elif param_type == 'composite':
-            query = self.build_composite_query(
-                value,
-                param_name,
-                path)
+        elif param_type == "composite":
+            occurrence_type, query = self.build_composite_query(value, param_name, path)
 
-        return query
+        return occurrence_type, query
 
-    def build_composite_query(
-            self,
-            value,
-            param_name,
-            path):
+    def build_composite_query(self, value, param_name, path):
         """ """
         params = None
         queries = list()
-        if param_name.startswith('code-'):
-            parts = param_name.split('-')
+        if param_name.startswith("code-"):
+            parts = param_name.split("-")
             params = (
-                (
-                    parts[0],
-                    self.resolve_query_meta(parts[0]),
-                ),
-                (
-                    '-'.join(parts[1:]),
-                    self.resolve_query_meta('-'.join(parts[1:])),
-                ))
+                (parts[0], self.resolve_query_meta(parts[0])),
+                ("-".join(parts[1:]), self.resolve_query_meta("-".join(parts[1:]))),
+            )
 
         assert params is not None
 
-        for composite_val in value.split(','):
-            value_parts = composite_val.split('&')
+        for composite_val in value.split(","):
+            value_parts = composite_val.split("&")
 
-            query1 = self._build_query(
-                params[0][0],
-                value_parts[0],
-                modifier=None,
-                query_meta=params[0][1])
+            occurrence_type, query1 = self._build_query(
+                params[0][0], value_parts[0], modifier=None, query_meta=params[0][1]
+            )
 
-            query2 = self._build_query(
-                params[1][0],
-                value_parts[1],
-                modifier=None,
-                query_meta=params[1][1])
+            occurrence_type, query2 = self._build_query(
+                params[1][0], value_parts[1], modifier=None, query_meta=params[1][1]
+            )
             queries.append(self.merge_query(query1, query2))
 
         if len(queries) == 1:
-            return queries[0]
+            return "filter", queries[0]
         else:
 
-            query = dict(query=dict(bool=dict(should=list())))
+            query = dict(bool=dict(should=list(), minimum_should_match=1))
 
             for qr in queries:
-                query['query']['bool']['should'].append(qr)
+                query["bool"]["should"].append(qr)
 
-            return query
+            return "filter", query
 
     def build_token_query(
-            self,
-            value,
-            path,
-            raw_path,
-            logic_in_path=None,
-            map_cls=None,
-            modifier=None):
+        self, value, path, raw_path, logic_in_path=None, map_cls=None, modifier=None
+    ):
         """ """
         mapped_definition = self.get_mapped_definition(path)
-        map_properties = mapped_definition.get('properties', None)
+        map_properties = mapped_definition.get("properties", None)
         nested = self.is_nested_mapping(mapped_definition=mapped_definition)
 
-        if map_properties == mapping_types.Identifier.get('properties') or \
-                map_cls == 'Identifier':
+        if (
+            map_properties == mapping_types.Identifier.get("properties")
+            or map_cls == "Identifier"
+        ):
             query = self._make_identifier_query(
+                path, value, nested=nested, modifier=modifier
+            )
+        elif (
+            map_properties == mapping_types.CodeableConcept.get("properties")
+            or map_cls == "CodeableConcept"
+        ):
+
+            query = self.make_codeableconcept_query(
                 path,
                 value,
                 nested=nested,
-                modifier=modifier)
-        elif map_properties == \
-                mapping_types.CodeableConcept.get('properties') or \
-                map_cls == 'CodeableConcept':
+                modifier=modifier,
+                logic_in_path=logic_in_path,
+            )
 
-            query = self._make_codeableconcept_query(
-                    path,
-                    value,
-                    nested=nested,
-                    modifier=modifier,
-                    logic_in_path=logic_in_path)
+        elif (
+            map_properties == mapping_types.Coding.get("properties")
+            or map_cls == "Coding"
+        ):
 
-        elif map_properties == \
-                mapping_types.Coding.get('properties') or \
-                map_cls == 'Coding':
+            query = self.make_coding_query(
+                path,
+                value,
+                nested=nested,
+                modifier=modifier,
+                logic_in_path=logic_in_path,
+            )
 
-            query = self._make_coding_query(
-                    path,
-                    value,
-                    nested=nested,
-                    modifier=modifier,
-                    logic_in_path=logic_in_path)
-
-        elif map_properties == \
-                mapping_types.Address.get('properties') or \
-                map_cls == 'Address':
+        elif (
+            map_properties == mapping_types.Address.get("properties")
+            or map_cls == "Address"
+        ):
             # address query
             query = self._make_address_query(
                 path,
                 value,
                 logic_in_path=logic_in_path,
                 nested=nested,
-                modifier=modifier)
+                modifier=modifier,
+            )
 
-        elif map_properties == \
-                mapping_types.ContactPoint.get('properties') or \
-                map_cls == 'ContactPoint':
+        elif (
+            map_properties == mapping_types.ContactPoint.get("properties")
+            or map_cls == "ContactPoint"
+        ):
             # contact point query
             query = self._make_contactpoint_query(
                 path,
                 value,
                 logic_in_path=logic_in_path,
                 nested=nested,
-                modifier=modifier)
+                modifier=modifier,
+            )
 
-        elif map_properties == \
-                mapping_types.HumanName.get('properties') or \
-                map_cls == 'HumanName':
+        elif (
+            map_properties == mapping_types.HumanName.get("properties")
+            or map_cls == "HumanName"
+        ):
             # contact HumanName query
             query = self._make_humanname_query(
-                path,
-                value,
-                nested=nested,
-                modifier=modifier)
+                path, value, nested=nested, modifier=modifier
+            )
 
         else:
             path_info = fhir_search_path_meta_info(raw_path)
             array_ = path_info[1] is True
             query = self._make_token_query(
-                path,
-                value,
-                array_=array_,
-                modifier=modifier)
+                path, value, array_=array_, modifier=modifier
+            )
 
         return query
 
     def build_string_query(
-            self,
-            value,
-            path,
-            raw_path,
-            logic_in_path=None,
-            map_cls=None,
-            modifier=None):
+        self, value, path, raw_path, logic_in_path=None, map_cls=None, modifier=None
+    ):
         """ """
         mapped_definition = self.get_mapped_definition(path)
-        map_properties = mapped_definition.get('properties', None)
+        map_properties = mapped_definition.get("properties", None)
         nested = self.is_nested_mapping(mapped_definition=mapped_definition)
 
-        if map_properties in \
-                (mapping_types.SearchableText, mapping_types.Text):
+        if map_properties in (mapping_types.SearchableText, mapping_types.Text):
 
             query = self._make_match_query(path, value, modifier)
 
-        elif map_properties == \
-                mapping_types.Address.get('properties') or \
-                map_cls == 'Address':
+        elif (
+            map_properties == mapping_types.Address.get("properties")
+            or map_cls == "Address"
+        ):
             # address query
             query = self._make_address_query(
                 path,
                 value,
                 logic_in_path=logic_in_path,
                 nested=nested,
-                modifier=modifier)
+                modifier=modifier,
+            )
 
-        elif map_properties == \
-                mapping_types.HumanName.get('properties') or \
-                map_cls == 'HumanName':
+        elif (
+            map_properties == mapping_types.HumanName.get("properties")
+            or map_cls == "HumanName"
+        ):
             # contact HumanName query
             query = self._make_humanname_query(
-                path,
-                value,
-                nested=nested,
-                modifier=modifier)
+                path, value, nested=nested, modifier=modifier
+            )
 
         else:
             path_info = fhir_search_path_meta_info(raw_path)
             array_ = path_info[1] is True
             query = self._make_token_query(
-                path,
-                value,
-                array_=array_,
-                modifier=modifier)
+                path, value, array_=array_, modifier=modifier
+            )
 
         return query
 
     def clean_params(self):
         """ """
         unwanted = list()
-        for param, value in self.params.items():
+        cleaned_params = list()
+        for index, item in enumerate(self.params):
+            param, value = item
             # Clean escape char in value.
             # https://www.hl7.org/fhir/search.html#escaping
-            if value and '\\' in value:
-                value = value.replace('\\', '')
+            if value and "\\" in value:
+                value = value.replace("\\", "")
 
-            parts = param.split(':')
+            parts = param.split(":")
 
             if parts[0] not in FHIR_SEARCH_PARAMETER_SEARCHABLE:
                 unwanted.append((param, ERROR_PARAM_UNKNOWN))
                 continue
 
-            if parts[0] in ('_content', '_id', '_lastUpdated',
-                            '_profile', '_query', '_security',
-                            '_tag', '_text'):
+            if parts[0] in (
+                "_content",
+                "_id",
+                "_lastUpdated",
+                "_profile",
+                "_query",
+                "_security",
+                "_tag",
+                "_text",
+            ):
+                cleaned_params.append(item)
 
                 continue
 
-            supported_paths = \
-                FHIR_SEARCH_PARAMETER_SEARCHABLE[parts[0]][1]
+            supported_paths = FHIR_SEARCH_PARAMETER_SEARCHABLE[parts[0]][1]
 
             for path in supported_paths:
                 if path.startswith(self.resource_type):
+                    cleaned_params.append(item)
                     break
             else:
                 unwanted.append((param, ERROR_PARAM_UNSUPPORTED))
 
-        FHIR_FIELD_DEBUG and \
-            unwanted and \
-            LOGGER.info(
-                'ElasticsearchQueryBuilder: unwanted {0!s} parameter(s) '
-                'have been cleaned'.format(unwanted))
+        FHIR_FIELD_DEBUG and unwanted and LOGGER.info(
+            "ElasticsearchQueryBuilder: unwanted {0!s} parameter(s) "
+            "have been cleaned".format(unwanted)
+        )
+
+        # reset clened version
+        self.params = cleaned_params
 
         return unwanted
 
@@ -1056,17 +1081,17 @@ class ElasticSearchQueryBuilder:
         unwanted = self.clean_params()
 
         if len(unwanted) > 0:
-
             errors = self.process_error_message(unwanted)
 
             raise SearchQueryValidationError(
-                f'Unwanted search parameters are found, {errors}')
+                f"Unwanted search parameters are found, {errors}"
+            )
 
         error_fields = list()
 
-        for param, value in self.params.items():
+        for param, value in self.params:
             """ """
-            parts = param.split(':')
+            parts = param.split(":")
             try:
                 name = parts[0]
                 modifier = parts[1]
@@ -1074,61 +1099,93 @@ class ElasticSearchQueryBuilder:
                 modifier = None
 
             if modifier and (modifier not in SEARCH_PARAM_MODIFIERS):
-                error_fields.append((
-                    name,
-                    'Unsupported modifier has been attached with parameter.'
-                    f'Allows modifiers are {SEARCH_PARAM_MODIFIERS}'))
+                error_fields.append(
+                    (
+                        name,
+                        (
+                            "Unsupported modifier has been attached with parameter."
+                            "Allows modifiers are {0!s}".format(SEARCH_PARAM_MODIFIERS)
+                        ),
+                    )
+                )
                 continue
 
-            if modifier in ('missing', 'exists') and \
-                    value not in ('true', 'false'):
+            if modifier in ("missing", "exists") and value not in ("true", "false"):
                 error_fields.append((param, ERROR_PARAM_WRONG_DATATYPE))
                 continue
 
             param_type = FHIR_SEARCH_PARAMETER_SEARCHABLE[name][0]
 
-            if param_type == 'date':
+            if param_type == "date":
                 self.validate_date(name, modifier, value, error_fields)
-            elif param_type == 'token':
+            elif param_type == "token":
                 self.validate_token(name, modifier, value, error_fields)
 
         if error_fields:
             errors = self.process_error_message(error_fields)
             raise SearchQueryValidationError(
-                f'Validation failed, {errors}')
+                ("Validation failed, {0!s}").format(errors)
+            )
 
     def validate_date(self, field, modifier, value, container):
         """ """
-        if modifier:
-            container.append((
-                field,
-                'date type parameter don\'t accept any modifier except `missing`',
-            ))
-        else:
-            prefix = value[0:2]
-            if prefix in FSPR_VALUE_PRIFIXES_MAP:
-                date_val = value[2:]
-            else:
-                date_val = value
+        if modifier and modifier not in ("not", "missing"):
+            container.append(
+                (
+                    field,
+                    (
+                        "date type parameter don't accept "
+                        "any modifier except `missing` and `not`"
+                    ),
+                )
+            )
+            return
 
-            try:
-                dt_parse(date_val)
-            except ValueError:
-                container.append((field, '{0} is not valid date string!'.format(value)))
+        for val in value.split(","):
+            self._validate_date(field, val.strip(), container)
+
+    def _validate_date(self, field, value, container):
+        """ """
+        prefix = value[0:2]
+        if prefix in FSPR_VALUE_PRIFIXES_MAP:
+            date_val = value[2:]
+        else:
+            date_val = value
+
+        try:
+            dt_parse(date_val)
+        except ValueError:
+            container.append((field, "{0} is not valid date string!".format(value)))
 
     def validate_token(self, field, modifier, value, container):
         """ """
-        if modifier == 'text' and '|' in value:
-            container.append((
-                field,
-                'Pipe (|) is not allowed in value, when `text` modifier is provided',
-            ))
-        elif len(value.split('|')) > 2:
+        has_escape_comma_ = has_escape_comma(value)
 
-            container.append((
-                field,
-                'Only single Pipe (|) can be used as separator!',
-            ))
+        if has_escape_comma_:
+            value = value.replace("\\,", escape_comma_replacer)
+
+        for val in value.split(","):
+            if has_escape_comma_ and has_escape_comma(val):
+                val = val.replace(escape_comma_replacer, "\\,")
+            self._validate_token(field, modifier, val, container)
+
+    def _validate_token(self, field, modifier, value, container):
+        """ """
+        if modifier == "text" and "|" in value:
+            container.append(
+                (
+                    field,
+                    (
+                        "Pipe (|) is not allowed in value, when "
+                        "`text` modifier is provided"
+                    ),
+                )
+            )
+        elif len(value.split("|")) > 2:
+
+            container.append(
+                (field, "Only single Pipe (|) can be used as separator!")
+            )
 
     def process_error_message(self, errors):
         """ """
