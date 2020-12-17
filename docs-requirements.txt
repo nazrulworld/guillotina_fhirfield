@@ -1,4 +1,4 @@
-recommonmark
+recommonmark==0.7.1
 # sphinxcontrib-httpexample
 sphinx==1.8.2
 sphinx-rtd-theme
