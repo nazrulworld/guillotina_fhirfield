@@ -1,6 +1,6 @@
 recommonmark
 # sphinxcontrib-httpexample
-sphinx==1.8.2
+sphinx==3.5.2
 sphinx-rtd-theme
 sphinxcontrib-apidoc
 sphinxcontrib.httpdomain==1.7.0
